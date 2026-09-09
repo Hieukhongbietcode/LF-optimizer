@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 08th, 2026
 // @namespace    http://tampermonkey.net/
-// @version      100.9.25
+// @version      100.9.27
 // @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -23,7 +23,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.25 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.27 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -2616,6 +2616,138 @@
     }
 
     // ==========================================
+    // LOAN SUMMARY / MODAL COPY BUTTONS (v100.9.27)
+    // Extracted from Master Loop 1. That loop runs only once a second AND bails out
+    // completely while text is being selected, which is why these buttons appeared a
+    // beat late and vanished for up to a second whenever the app re-rendered the
+    // panel. This function is idempotent - it only inserts a button where one is
+    // missing - so it is safe to call as often as needed.
+    // ==========================================
+    function lfInjectModalCopyButtons() {
+        // 3. Modal Texts (Borrower Info, Loan Number, Vesting, Financials)
+        try {
+            document.querySelectorAll('.modal.show, .modal[style*="display: block"], .ui-dialog[style*="display: block"]').forEach(modal => {
+                const textUpper = (modal.textContent || '').toUpperCase();
+
+                if (textUpper.includes('BORROWER INFORMATION')) {
+                    modal.querySelectorAll('table').forEach(tbl => {
+                        const firstRow = tbl.querySelector('tr');
+                        if (!firstRow) return;
+                        const thText = Array.from(firstRow.children).map(h => (h.textContent||'').toLowerCase().trim());
+                        const nIdx = thText.findIndex(h => h.includes('full name') || h === 'name');
+                        const pIdx = thText.findIndex(h => h.includes('phone'));
+                        const eIdx = thText.findIndex(h => h.includes('email'));
+
+                        tbl.querySelectorAll('tbody tr, tr').forEach(row => {
+                            if (row === firstRow) return;
+                            const tds = row.children;
+                            if (nIdx > -1 && tds[nIdx]) injectModalUnderCopy(tds[nIdx], getCleanText(tds[nIdx]));
+                            if (pIdx > -1 && tds[pIdx]) injectModalUnderCopy(tds[pIdx], getCleanText(tds[pIdx]).replace(/-\s+/g, '-'));
+                            if (eIdx > -1 && tds[eIdx]) injectModalUnderCopy(tds[eIdx], getCleanText(tds[eIdx]));
+                        });
+                    });
+                }
+
+                // v100.8.94: 'compensation' copies the whole value line, e.g.
+                // "Lender Paid = 2.5% * $196,733 = $4,918" (the label itself excluded).
+                const targetLabels = ['subject property address', 'loan number', 'new vesting', 'total loan amount', 'loan amount', 'property value', 'appraised value', 'compensation'];
+
+                Array.from(modal.querySelectorAll('td, th, dt, dd, span, div, strong, b, label')).forEach(el => {
+                    if (el.children.length > 1 && el.tagName !== 'TD') return;
+
+                    // v100.8.65: never treat a TABLE COLUMN HEADER as a label/value pair.
+                    // "Loan Amount" is in targetLabels, so in the Bonus Details grid it
+                    // matched the column header and put a copy button on the cell to its
+                    // right - "Funded Date". Header rows are now skipped entirely.
+                    if (el.tagName === 'TH' || el.tagName === 'TD') {
+                        if (el.closest('thead')) return;
+                        const hr = el.closest('tr');
+                        if (hr && hr.cells && hr.cells.length >= 3) {
+                            const cells = Array.from(hr.cells);
+                            const allTh = cells.every(c => c.tagName === 'TH');
+                            const noValues = cells.every(c => !/\d/.test(getCleanText(c)));
+                            if (allTh || noValues) return; // looks like a column-header row
+                        }
+                    }
+
+                    const text = (el.textContent || '').toLowerCase().trim();
+
+                    if (targetLabels.some(l => text === l || text === l + ':')) {
+                        let vEl = el.nextElementSibling;
+                        if (!vEl) {
+                            if (el.tagName === 'TD' || el.tagName === 'TH') {
+                                const tr = el.closest('tr');
+                                if (tr && tr.cells.length > el.cellIndex+1) vEl = tr.cells[el.cellIndex+1];
+                            } else {
+                                const parent = el.parentElement;
+                                if (parent && parent.children.length > 1) {
+                                    const index = Array.from(parent.children).indexOf(el);
+                                    if (index > -1 && index + 1 < parent.children.length) vEl = parent.children[index + 1];
+                                }
+                            }
+                        }
+                        if (vEl) {
+                            let cText = getCleanText(vEl);
+
+                            // Extract just the dollar amount for financial fields.
+                            // v100.8.94: 'compensation' is deliberately NOT in this list -
+                            // its value is a formula and must be copied whole, otherwise
+                            // it would be reduced to the first dollar figure.
+                            if (text !== 'compensation' && text !== 'compensation:' &&
+                                ['total loan amount', 'loan amount', 'property value', 'appraised value'].some(l => text.includes(l))) {
+                                const match = cText.match(/\$[\d,]+(\.\d{2})?/);
+                                if (match) cText = match[0];
+                                else cText = cText.split('-')[0].trim(); // Fallback if no $ symbol
+                            }
+
+                            injectModalInlineCopy(vEl, cText);
+                        }
+                    }
+                });
+            });
+        } catch (e) { console.error("[LF Optimizer] Modal copy button error:", e); }
+
+        // 4. Agent Contact Modal
+        try {
+            document.querySelectorAll('.modal.show, .modal[style*="display: block"], .ui-dialog[style*="display: block"]').forEach(modal => {
+                const textUpper = (modal.textContent || '').toUpperCase();
+                if (textUpper.includes('LANGUAGE(S)') || textUpper.includes('REALTOR OWNER')) {
+                    let titleText = '';
+                    const titleEl = modal.querySelector('.modal-title, .ui-dialog-title');
+                    if (titleEl) {
+                        titleText = getCleanText(titleEl).toLowerCase();
+                    } else {
+                        const header = modal.querySelector('.modal-header');
+                        if (header) titleText = getCleanText(header).toLowerCase();
+                    }
+
+                    const body = modal.querySelector('.modal-body, .ui-dialog-content') || modal;
+                    Array.from(body.querySelectorAll('div, span, p, label, td, th')).forEach(el => {
+                        if (el.children.length > 1 && el.tagName !== 'TD') return;
+                        const t = getCleanText(el);
+                        if (!t || t.length < 3) return;
+                        const tLow = t.toLowerCase();
+
+                        let isMatch = false;
+
+                        if (tLow.includes('@') && tLow.includes('.') && !t.includes(' ')) {
+                            isMatch = true;
+                        } else if (/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/.test(t)) {
+                            isMatch = true;
+                        } else if (titleText && tLow === titleText) {
+                            isMatch = true;
+                        }
+
+                        if (isMatch) {
+                            injectModalInlineCopy(el, t);
+                        }
+                    });
+                }
+            });
+        } catch (e) { console.error("[LF Optimizer] Agent modal copy button error:", e); }
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
@@ -2795,7 +2927,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.25</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.27</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -3524,6 +3656,50 @@
         menuObserver.observe(document.body, { childList: true, subtree: true });
 
         // ==========================================
+        // v100.9.27: LOAN SUMMARY WATCHER
+        // The panel's content arrives after the modal element itself, so a single
+        // pass on open is not enough. This reacts to the modal appearing AND to its
+        // content changing, batched through requestAnimationFrame, then re-checks on
+        // a short ladder while the panel settles. Result: the copy buttons are there
+        // as soon as there is anything to attach them to, and they are re-asserted
+        // for as long as the panel stays open.
+        // ==========================================
+        let lfModalPassQueued = false;
+        function lfQueueModalPass() {
+            if (lfModalPassQueued) return;
+            lfModalPassQueued = true;
+            requestAnimationFrame(() => {
+                lfModalPassQueued = false;
+                try { lfInjectModalCopyButtons(); } catch (e) {}
+            });
+        }
+
+        const LF_MODAL_SEL = '.modal.show, .modal[style*="display: block"], .ui-dialog[style*="display: block"], div[role="dialog"]';
+
+        new MutationObserver((muts) => {
+            for (const m of muts) {
+                // content of an open panel changed
+                if (m.target && m.target.closest && m.target.closest(LF_MODAL_SEL)) { lfQueueModalPass(); return; }
+                // a panel (or something inside one) was just added
+                for (const n of m.addedNodes) {
+                    if (n.nodeType !== 1) continue;
+                    if ((n.matches && n.matches(LF_MODAL_SEL)) || (n.closest && n.closest(LF_MODAL_SEL)) ||
+                        (n.querySelector && n.querySelector(LF_MODAL_SEL))) {
+                        lfQueueModalPass();
+                        // the body of the summary loads in stages - catch each one
+                        [40, 120, 250, 500, 900].forEach(ms => setTimeout(() => {
+                            try { lfInjectModalCopyButtons(); } catch (e) {}
+                        }, ms));
+                        return;
+                    }
+                }
+            }
+        }).observe(document.body, { childList: true, subtree: true, characterData: true });
+
+        // first pass in case a panel is already open when the script starts
+        lfQueueModalPass();
+
+        // ==========================================
         // MASTER LOOP 1: UI & TABLES (Runs every 1000ms)
         // ==========================================
         setInterval(() => {
@@ -3868,127 +4044,8 @@
                 });
             } catch (e) { console.error("[LF Optimizer] Employment isolated label error:", e); }
 
-            // 3. Modal Texts (Borrower Info, Loan Number, Vesting, Financials)
-            try {
-                document.querySelectorAll('.modal.show, .modal[style*="display: block"], .ui-dialog[style*="display: block"]').forEach(modal => {
-                    const textUpper = (modal.textContent || '').toUpperCase();
-
-                    if (textUpper.includes('BORROWER INFORMATION')) {
-                        modal.querySelectorAll('table').forEach(tbl => {
-                            const firstRow = tbl.querySelector('tr');
-                            if (!firstRow) return;
-                            const thText = Array.from(firstRow.children).map(h => (h.textContent||'').toLowerCase().trim());
-                            const nIdx = thText.findIndex(h => h.includes('full name') || h === 'name');
-                            const pIdx = thText.findIndex(h => h.includes('phone'));
-                            const eIdx = thText.findIndex(h => h.includes('email'));
-
-                            tbl.querySelectorAll('tbody tr, tr').forEach(row => {
-                                if (row === firstRow) return;
-                                const tds = row.children;
-                                if (nIdx > -1 && tds[nIdx]) injectModalUnderCopy(tds[nIdx], getCleanText(tds[nIdx]));
-                                if (pIdx > -1 && tds[pIdx]) injectModalUnderCopy(tds[pIdx], getCleanText(tds[pIdx]).replace(/-\s+/g, '-'));
-                                if (eIdx > -1 && tds[eIdx]) injectModalUnderCopy(tds[eIdx], getCleanText(tds[eIdx]));
-                            });
-                        });
-                    }
-
-                    // v100.8.94: 'compensation' copies the whole value line, e.g.
-                    // "Lender Paid = 2.5% * $196,733 = $4,918" (the label itself excluded).
-                    const targetLabels = ['subject property address', 'loan number', 'new vesting', 'total loan amount', 'loan amount', 'property value', 'appraised value', 'compensation'];
-
-                    Array.from(modal.querySelectorAll('td, th, dt, dd, span, div, strong, b, label')).forEach(el => {
-                        if (el.children.length > 1 && el.tagName !== 'TD') return;
-
-                        // v100.8.65: never treat a TABLE COLUMN HEADER as a label/value pair.
-                        // "Loan Amount" is in targetLabels, so in the Bonus Details grid it
-                        // matched the column header and put a copy button on the cell to its
-                        // right - "Funded Date". Header rows are now skipped entirely.
-                        if (el.tagName === 'TH' || el.tagName === 'TD') {
-                            if (el.closest('thead')) return;
-                            const hr = el.closest('tr');
-                            if (hr && hr.cells && hr.cells.length >= 3) {
-                                const cells = Array.from(hr.cells);
-                                const allTh = cells.every(c => c.tagName === 'TH');
-                                const noValues = cells.every(c => !/\d/.test(getCleanText(c)));
-                                if (allTh || noValues) return; // looks like a column-header row
-                            }
-                        }
-
-                        const text = (el.textContent || '').toLowerCase().trim();
-
-                        if (targetLabels.some(l => text === l || text === l + ':')) {
-                            let vEl = el.nextElementSibling;
-                            if (!vEl) {
-                                if (el.tagName === 'TD' || el.tagName === 'TH') {
-                                    const tr = el.closest('tr');
-                                    if (tr && tr.cells.length > el.cellIndex+1) vEl = tr.cells[el.cellIndex+1];
-                                } else {
-                                    const parent = el.parentElement;
-                                    if (parent && parent.children.length > 1) {
-                                        const index = Array.from(parent.children).indexOf(el);
-                                        if (index > -1 && index + 1 < parent.children.length) vEl = parent.children[index + 1];
-                                    }
-                                }
-                            }
-                            if (vEl) {
-                                let cText = getCleanText(vEl);
-
-                                // Extract just the dollar amount for financial fields.
-                                // v100.8.94: 'compensation' is deliberately NOT in this list -
-                                // its value is a formula and must be copied whole, otherwise
-                                // it would be reduced to the first dollar figure.
-                                if (text !== 'compensation' && text !== 'compensation:' &&
-                                    ['total loan amount', 'loan amount', 'property value', 'appraised value'].some(l => text.includes(l))) {
-                                    const match = cText.match(/\$[\d,]+(\.\d{2})?/);
-                                    if (match) cText = match[0];
-                                    else cText = cText.split('-')[0].trim(); // Fallback if no $ symbol
-                                }
-
-                                injectModalInlineCopy(vEl, cText);
-                            }
-                        }
-                    });
-                });
-            } catch (e) { console.error("[LF Optimizer] Modal copy button error:", e); }
-
-            // 4. Agent Contact Modal
-            try {
-                document.querySelectorAll('.modal.show, .modal[style*="display: block"], .ui-dialog[style*="display: block"]').forEach(modal => {
-                    const textUpper = (modal.textContent || '').toUpperCase();
-                    if (textUpper.includes('LANGUAGE(S)') || textUpper.includes('REALTOR OWNER')) {
-                        let titleText = '';
-                        const titleEl = modal.querySelector('.modal-title, .ui-dialog-title');
-                        if (titleEl) {
-                            titleText = getCleanText(titleEl).toLowerCase();
-                        } else {
-                            const header = modal.querySelector('.modal-header');
-                            if (header) titleText = getCleanText(header).toLowerCase();
-                        }
-
-                        const body = modal.querySelector('.modal-body, .ui-dialog-content') || modal;
-                        Array.from(body.querySelectorAll('div, span, p, label, td, th')).forEach(el => {
-                            if (el.children.length > 1 && el.tagName !== 'TD') return;
-                            const t = getCleanText(el);
-                            if (!t || t.length < 3) return;
-                            const tLow = t.toLowerCase();
-
-                            let isMatch = false;
-
-                            if (tLow.includes('@') && tLow.includes('.') && !t.includes(' ')) {
-                                isMatch = true;
-                            } else if (/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/.test(t)) {
-                                isMatch = true;
-                            } else if (titleText && tLow === titleText) {
-                                isMatch = true;
-                            }
-
-                            if (isMatch) {
-                                injectModalInlineCopy(el, t);
-                            }
-                        });
-                    }
-                });
-            } catch (e) { console.error("[LF Optimizer] Agent modal copy button error:", e); }
+            // 3+4. Loan summary / modal copy buttons (v100.9.27: own function)
+            try { lfInjectModalCopyButtons(); } catch (e) { console.error("[LF Optimizer] Modal copy button error:", e); }
 
         }, 1000);
 
@@ -4000,6 +4057,12 @@
             // This must run continuously - the popup may be replaced by the compose
             // window BEFORE the user ever pastes, so arming can't wait for a paste event.
             try { isCleanPasteSuspended(); } catch (err) {}
+
+            // v100.9.27: modal copy buttons run BEFORE the selection guard. The
+            // function only inserts what is missing, so during a selection it does
+            // nothing at all - but it means a button lost to a re-render is restored
+            // within 500ms instead of waiting on the 1s loop.
+            try { lfInjectModalCopyButtons(); } catch (err) {}
 
             if (lfSelectionBusy()) return;   // v100.8.92
 
