@@ -1,10 +1,7 @@
 // ==UserScript==
-// RELEASE CHECKLIST - do these two things on every release:
-//   1. bump @version           (Tampermonkey only offers an update if this rises)
-//   2. set the date in @name    (format: "Update Mon DDth, YYYY", e.g. Update Sept 08th, 2026)
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 08th, 2026
 // @namespace    http://tampermonkey.net/
-// @version      100.9.24
+// @version      100.9.25
 // @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -16,10 +13,17 @@
 // @homepageURL  https://github.com/Hieukhongbietcode/LF-optimizer
 // ==/UserScript==
 
+// RELEASE CHECKLIST - two things on every release:
+//   1. bump @version                (Tampermonkey only offers an update if this rises)
+//   2. set the date in @name        (format: "Update Mon DDth, YYYY")
+// Nothing but "// @key value" lines may appear inside the ==UserScript== block above -
+// a stray comment there can stop Tampermonkey reading @version and @updateURL, which
+// makes every update check report "no updates found".
+
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.24 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.25 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -2791,7 +2795,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.24</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.25</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
