@@ -5,7 +5,7 @@
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
 
-A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, one-click copying, and editor conveniences.
+A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, one-click copying, and editor conveniences.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
 
@@ -51,7 +51,7 @@ Pick the store that matches your browser:
 | **Edge** | [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) |
 
 
-**Using Firefox? Skip to [Step 3](#step-3--install-the-script).** Steps 2 applies only to Chrome and Edge.
+**Using Firefox? Skip to [Step 3](#step-3--install-the-script).** Step 2 applies only to Chrome and Edge.
 
 ---
 
@@ -107,7 +107,8 @@ Open Loan Factory and go to your pipeline. You should see:
 - Small copy buttons beside borrower names and loan numbers
 - A **palette icon** in the top bar, which opens the settings panel
 
-<img width="1415" height="150" alt="image" src="https://github.com/user-attachments/assets/60f5e38d-c286-4774-a92b-852dc1c87546" />
+<img width="878" height="177" alt="image" src="https://github.com/user-attachments/assets/0d38ddcb-9946-44d6-9213-d330e13860e5" />
+
 
 To confirm precisely, press **F12** to open the browser console. You should see:
 
@@ -138,6 +139,7 @@ If a newer version exists, Tampermonkey shows it and installs it on confirmation
 ## Features
 
 Everything is configured from the **palette icon** in the Loan Factory top bar.
+
 <img width="338" height="940" alt="image" src="https://github.com/user-attachments/assets/6df15e74-6289-4e96-b358-727a2a48de54" />
 
 
@@ -152,6 +154,34 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 | **Liabilities copier** | Copies the liabilities table, automatically skipping empty $0/$0 rows |
 | **Loan Summary pop-out** | Opens the summary in its own window, with working copy buttons |
 
+### Loan Summary
+
+| Feature | What it does |
+|---|---|
+| **Calculated LTV** | Shown on both money rows, worked out against the appraised value — not copied from the portal's own field |
+| **LTV colour scale** | The percentage is bold and shaded green → yellow → red as it climbs |
+| **Downpayment** | Appraised value minus total loan amount, shown beside the LTV, with its own copy button |
+| **Instant copy buttons** | Appear the moment the panel opens, and stay put when the panel re-renders |
+
+LTV is calculated per row:
+
+| Row | Formula |
+|---|---|
+| Total loan amount | total loan amount ÷ appraised value |
+| Loan amount | loan amount ÷ appraised value |
+
+*Example: $628,306 ÷ $650,000 = **96.66%**, and Downpayment = **$21,694**.*
+
+Property value is used as the basis only when no appraised value has been entered yet.
+
+### 1003 Application
+
+| Feature | What it does |
+|---|---|
+| **Real Estate addresses** | A copy button beside every property address. Copies the address alone — the "Missing: …" notes are left out |
+| **Employment copier** | Copies employment details in one click |
+| **Financials copier** | Copies the financials table |
+
 ### Escalation desk
 
 | Feature | What it does |
@@ -164,18 +194,19 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 
 **Turn-time rules**
 
-| Role | Standard | Rush | Income review |
-|---|---|---|---|
-| Underwriter | 8 hours | 5 hours | 3 hours |
-| Disclosure Specialist | 4 hours | 4 hours | 4 hours |
+| Role | Standard | Rush | Income review | Resubmit |
+|---|---|---|---|---|
+| Underwriter | 8 hours | 5 hours | 3 hours | — |
+| Disclosure Specialist | 4 hours | 4 hours | 4 hours | **6 hours** |
 
-Counted in business hours only — Monday to Friday, 9:00 to 18:00.
+Counted in business hours only — Monday to Friday, 9:00 to 18:00. The Underwriter clock starts at the created time; the Disclosure Specialist clock starts at the assign time.
 
 ### Editing
 
 | Feature | What it does |
 |---|---|
-| **Default Text Style** | Font, size, bold/italic/underline, colour and highlight, applied as you type. Supports saved presets |
+| **Default Text Style** | Font, size, bold/italic/underline, colour and highlight, applied as you type |
+| **Style presets** | One-click presets — **Jake** sets Noto Sans, bold, 16px, `#ff51b2` |
 | **Clean Paste** | Strips formatting from pasted text. Pictures paste normally |
 | **Unsaved-note protection** | Warns before you navigate away from a note you haven't saved |
 | **Ctrl+Q** | Applies your saved text style to the current selection |
@@ -190,7 +221,7 @@ Counted in business hours only — Monday to Friday, 9:00 to 18:00.
 | **Auto-navigate to Docs** | Jumps straight to the Docs tab when opening a loan |
 | **Auto-collapse sidebar** | Reclaims screen width automatically |
 | **Backup & Restore** | Exports every setting to a JSON file |
-| **System Notices** | Optionally auto-dismisses the portal's "WARNING NOTICE" pop-up |
+| **System Notices** | Optionally auto-dismisses the portal's "WARNING NOTICE" pop-up — **off by default** |
 
 ---
 
@@ -270,6 +301,9 @@ No, as long as you installed from the raw link. Use **Utilities → Check for us
 **Why does it stop working after browser updates?**
 Chrome and Edge reset the "Allow User Scripts" permission when they update. Turn it back on and restart the browser. Firefox does not have this problem.
 
+**Why is the LTV different from the portal's own LTV field?**
+This one is calculated against the appraised value, so it stays correct even when the portal's field is stale or empty.
+
 ---
 
 ## Notes for maintainers
@@ -280,4 +314,4 @@ Releasing a new version:
 2. Update the date in `@name`, format `Update Mon DDth, YYYY`
 3. Upload to the repo **keeping the file name exactly** `loan-factory-optimizer.user.js` — the update URL must never change
 
-The metadata block must contain **only** `// @key value` lines. A stray comment inside it can stop Tampermonkey reading `@match` and `@version`, which makes the script silently fail to run.
+The metadata block must contain **only** `// @key value` lines. A stray comment inside it — or the literal block delimiters appearing in a comment elsewhere in the file — can stop Tampermonkey reading `@match` and `@version`, which makes the script silently fail to run.
