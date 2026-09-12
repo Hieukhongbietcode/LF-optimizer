@@ -69,7 +69,8 @@ Chrome and Edge require an extra permission before Tampermonkey is allowed to ru
 - Chrome: top-right corner
 - Edge: bottom-left corner
 
-<img width="1536" height="651" alt="image" src="https://github.com/user-attachments/assets/fde88e92-8a9c-460c-8a62-819b8d1f7492" />
+<img width="1533" height="701" alt="image" src="https://github.com/user-attachments/assets/30a8eef6-1c70-4a2f-8d2a-9b5f9cf896a9" />
+
 
 **2.3** Find Tampermonkey and click **Details**
 
