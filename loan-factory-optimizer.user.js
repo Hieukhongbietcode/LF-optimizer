@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 08th, 2026
+// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 11th, 2026
 // @namespace    http://tampermonkey.net/
-// @version      100.9.27
+// @version      100.9.35
 // @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -13,17 +13,10 @@
 // @homepageURL  https://github.com/Hieukhongbietcode/LF-optimizer
 // ==/UserScript==
 
-// RELEASE CHECKLIST - two things on every release:
-//   1. bump @version                (Tampermonkey only offers an update if this rises)
-//   2. set the date in @name        (format: "Update Mon DDth, YYYY")
-// Nothing but "// @key value" lines may appear inside the ==UserScript== block above -
-// a stray comment there can stop Tampermonkey reading @version and @updateURL, which
-// makes every update check report "no updates found".
-
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.27 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.35 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -416,9 +409,10 @@
         }) || null;
     }
 
-    function lfPopOutHTML(html) {
+    function lfPopOutHTML(html, title) {
+        const winTitle = title || 'Loan Summary';
         const winW = 850, winH = Math.floor(window.screen.availHeight * 0.85);
-        const sw = window.open('', 'LFSummaryWindow', `width=${winW},height=${winH},resizable=yes,scrollbars=yes`);
+        const sw = window.open('', 'LFPop_' + winTitle.replace(/\W+/g, ''), `width=${winW},height=${winH},resizable=yes,scrollbars=yes`);
         if (!sw) { showToast('Pop-up blocked \u2013 allow pop-ups for loanfactory.com'); return; }
         const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map(el => el.outerHTML).join('\n');
         const copyScript = "\n<scr" + "ipt>\n" + `
@@ -443,7 +437,7 @@
                 setTimeout(() => { btn.innerHTML = LF_COPY_SVG; btn.style.color = ''; }, 1000);
             });
         ` + "\n</scr" + "ipt>";
-        sw.document.write(`<!DOCTYPE html><html><head><title>Loan Summary</title><base href="${window.location.origin}">${styles}<style>
+        sw.document.write(`<!DOCTYPE html><html><head><title>${winTitle}</title><base href="${window.location.origin}">${styles}<style>
             /* v100.8.85: the panel markup carries .modal / .modal-dialog classes, which
                the app's stylesheet hides by default - that is why the window came up
                blank. Force the cloned content visible and static. */
@@ -481,6 +475,13 @@
             p = p.parentElement;
         }
         if (!panel || !closeEl) return;
+
+        // v100.9.30: the walk above stops at the first element that owns a close
+        // control, which on the Service Desks panel is only its header bar - that is
+        // why the popped-out window came up almost empty. Prefer the real dialog root
+        // when there is one, so the whole panel is captured.
+        const root = head.closest('.modal, .ui-dialog, [role="dialog"], .modal-dialog') || panel;
+        if (root && root.contains(panel)) panel = root;
         const existingBtn = document.getElementById('lf-summary-popup-btn');
         if (existingBtn) { lfPositionPopupBtn(existingBtn, closeEl); return; }
 
@@ -501,11 +502,16 @@
             // LTV/summary pass.
             const source = panel.querySelector('.modal-content') || panel;
             const clone = source.cloneNode(true);
+            // v100.9.30: strip the loading spinner so a half-loaded panel is obvious
+            clone.querySelectorAll('.spinner, .spinner-border, .loading, .lf-spin').forEach(x => x.remove());
             clone.querySelectorAll('#lf-summary-popup-btn, [data-dismiss], .close').forEach(x => x.remove());
             let html = clone.innerHTML;
             if ((clone.textContent || '').trim().length < 40) html = localStorage.getItem('lf_saved_summary') || html;
-            if (!html || !html.trim()) { showToast('Summary is still loading \u2013 try again in a second'); return; }
-            lfPopOutHTML(html);
+            if (!html || !html.trim() || (clone.textContent || '').trim().length < 40) {
+                showToast('Still loading \u2013 wait for the panel to fill in, then try again');
+                return;
+            }
+            lfPopOutHTML(html, 'Loan Summary');
         };
         // v100.8.86: rather than guessing where the X sits in the markup, the button is
         // fixed-positioned to the X's measured screen position, so it always lands
@@ -965,10 +971,14 @@
             label: 'Disclosure Specialist',
             ready: true,
             startFrom: 'assign',    // clock starts when the ticket was assigned
-            summary: '<div><b>All tickets:</b> 4 hours</div>'
+            summary: '<div><b>Standard:</b> 4 hours</div>'
+                   + '<div><b>Resubmit (re-disclose):</b> 6 hours</div>'
                    + '<div class="lf-tt-note">Counted from the <b>assign time</b> \u2013 the oldest "Ticket\'s owner" entry in Action \u2192 Audit log.</div>'
                    + '<div class="lf-tt-note">Counted Mon\u2013Fri, 9:00\u201318:00 only.</div>',
-            hours: () => 4          // 4 business hours regardless of priority
+            // v100.9.30: a re-disclosure gets 6 business hours; everything else 4.
+            // Detected with the same pattern that draws the green "Resubmit" chip, so
+            // the two can never disagree.
+            hours: (text) => (LF_RD_RX.test(text || '') ? 6 : 4)
         }
     };
 
@@ -2616,12 +2626,12 @@
     }
 
     // ==========================================
-    // LOAN SUMMARY / MODAL COPY BUTTONS (v100.9.27)
-    // Extracted from Master Loop 1. That loop runs only once a second AND bails out
-    // completely while text is being selected, which is why these buttons appeared a
-    // beat late and vanished for up to a second whenever the app re-rendered the
-    // panel. This function is idempotent - it only inserts a button where one is
-    // missing - so it is safe to call as often as needed.
+    // LOAN SUMMARY COPY BUTTONS (v100.9.28)
+    // This is the exact code that used to sit inline in Master Loop 1. It was moved
+    // out for one reason: that loop runs once a second and skips everything while
+    // text is selected, so the buttons arrived late and stayed missing for up to a
+    // second after the panel re-rendered. It only inserts a button where one is
+    // missing, so calling it repeatedly costs nothing.
     // ==========================================
     function lfInjectModalCopyButtons() {
         // 3. Modal Texts (Borrower Info, Loan Number, Vesting, Financials)
@@ -2745,6 +2755,189 @@
                 }
             });
         } catch (e) { console.error("[LF Optimizer] Agent modal copy button error:", e); }
+    }
+
+    // ==========================================
+    // LTV / DOWNPAYMENT (v100.9.29)
+    // LTV used to be copied from whatever the portal put in its own "LTV" field.
+    // It is now calculated, so both money rows can carry one:
+    //     Total loan amount  ->  total loan amount / appraised value
+    //     Loan amount        ->  loan amount       / appraised value
+    // and the Total row also shows Downpayment = appraised value - total loan amount.
+    // ==========================================
+    function lfParseMoney(text) {
+        if (!text) return NaN;
+        const m = String(text).replace(/[\u200B\s]/g, '').match(/-?\$?([\d,]+(?:\.\d+)?)/);
+        if (!m) return NaN;
+        const n = parseFloat(m[1].replace(/,/g, ''));
+        return isFinite(n) ? n : NaN;
+    }
+
+    function lfFmtMoney(n) {
+        return '$' + Math.round(n).toLocaleString('en-US');
+    }
+
+    function lfFmtPct(n) {
+        // 95 -> "95%", 96.6624 -> "96.66%"
+        const r = Math.round(n * 100) / 100;
+        return (Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')) + '%';
+    }
+
+    // 0% green -> 50% yellow -> 100% red, interpolated channel by channel.
+    function lfLtvColor(pct) {
+        const p = Math.max(0, Math.min(100, pct));
+        const GREEN = [22, 163, 74], YELLOW = [234, 179, 8], RED = [220, 38, 38];
+        const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+        const rgb = p <= 50 ? mix(GREEN, YELLOW, p / 50) : mix(YELLOW, RED, (p - 50) / 50);
+        return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+
+    // Finds the value cell that sits opposite a label in the summary table.
+    function lfSummaryValueCell(scope, labelRx) {
+        for (const el of scope.querySelectorAll('td, th, dt, dd, span, div, strong, b, label')) {
+            if (el.children.length > 1) continue;
+            const t = (el.textContent || '').replace(/\s+/g, ' ').toLowerCase().trim().replace(/:$/, '');
+            if (!labelRx.test(t)) continue;
+            let v = el.nextElementSibling;
+            if (!v && el.tagName === 'TD') {
+                const tr = el.closest('tr');
+                if (tr && tr.cells.length > el.cellIndex + 1) v = tr.cells[el.cellIndex + 1];
+            }
+            if (v) return v;
+        }
+        return null;
+    }
+
+    function lfMakeLtvSpan(cls, pct) {
+        const wrap = document.createElement('span');
+        wrap.className = cls;
+        wrap.appendChild(document.createTextNode(' - LTV: '));
+        const num = document.createElement('span');
+        num.className = 'lf-ltv-num';
+        num.textContent = lfFmtPct(pct);
+        num.style.fontWeight = '700';
+        num.style.color = lfLtvColor(pct);
+        wrap.appendChild(num);
+        return wrap;
+    }
+
+    function lfApplyLtvAndDownpayment(scope) {
+        const totalCell = lfSummaryValueCell(scope, /^total loan amount$/);
+        const loanCell  = lfSummaryValueCell(scope, /^loan amount$/);
+        const apprCell  = lfSummaryValueCell(scope, /^appraised value$/);
+        const propCell  = lfSummaryValueCell(scope, /^property value$/);
+
+        // Appraised value is the basis; property value is used only when the
+        // appraised figure has not been filled in yet.
+        let basis = apprCell ? lfParseMoney(apprCell.textContent) : NaN;
+        if (!isFinite(basis) || basis <= 0) basis = propCell ? lfParseMoney(propCell.textContent) : NaN;
+        if (!isFinite(basis) || basis <= 0) return;
+
+        // ---- Total loan amount: LTV + Downpayment ----
+        if (totalCell) {
+            const total = lfParseMoney(totalCell.cloneNode(true).textContent.replace(/ - LTV:.*$/i, ''));
+            if (isFinite(total) && total > 0) {
+                const pct = (total / basis) * 100;
+                let span = totalCell.querySelector('.lf-ltv-appended');
+                if (!span) { span = lfMakeLtvSpan('lf-ltv-appended', pct); totalCell.appendChild(span); }
+                else {
+                    const num = span.querySelector('.lf-ltv-num');
+                    if (num) { num.textContent = lfFmtPct(pct); num.style.color = lfLtvColor(pct); num.style.fontWeight = '700'; }
+                }
+
+                const down = basis - total;
+                let dp = totalCell.querySelector('.lf-dp-appended');
+                if (!dp) {
+                    dp = document.createElement('span');
+                    dp.className = 'lf-dp-appended';
+                    dp.style.cssText = 'margin-left:8px; font-weight:700; white-space:nowrap;';
+                    totalCell.appendChild(dp);
+                }
+                const dpText = lfFmtMoney(down);
+                if (dp.dataset.lfVal !== dpText) {
+                    dp.dataset.lfVal = dpText;
+                    dp.textContent = 'Downpayment: ' + dpText;
+                    const b = document.createElement('button');
+                    b.className = 'lf-icon-btn lf-dp-copy';
+                    b.type = 'button';
+                    b.title = 'Copy the downpayment';
+                    b.innerHTML = COPY_SVG;
+                    b.onclick = async (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        try {
+                            await navigator.clipboard.writeText(dpText);
+                            b.innerHTML = CHECK_SVG; b.style.color = '#28a745';
+                            showToast('Copied: ' + dpText);
+                            setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
+                        } catch (err) { showToast('Copy failed'); }
+                    };
+                    dp.appendChild(b);
+                }
+            }
+        }
+
+        // ---- Loan amount: LTV only, no downpayment ----
+        if (loanCell) {
+            const amt = lfParseMoney(loanCell.cloneNode(true).textContent.replace(/ - LTV:.*$/i, ''));
+            if (isFinite(amt) && amt > 0) {
+                const pct = (amt / basis) * 100;
+                let span = loanCell.querySelector('.lf-ltv2-appended');
+                if (!span) { span = lfMakeLtvSpan('lf-ltv2-appended', pct); loanCell.appendChild(span); }
+                else {
+                    const num = span.querySelector('.lf-ltv-num');
+                    if (num) { num.textContent = lfFmtPct(pct); num.style.color = lfLtvColor(pct); num.style.fontWeight = '700'; }
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // 1003 > REAL ESTATE: COPY THE PROPERTY ADDRESS (v100.9.29)
+    // Each property is a link; the "Missing: ..." notes sit outside that link, so
+    // copying the link's own text gives the address on its own with nothing else.
+    // Scoped to the Real Estate Owned section so no other link on the page is touched.
+    // ==========================================
+    function lfInjectRealEstateCopyButtons() {
+        // Locate the "Real Estate Owned" section
+        let section = null;
+        for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,div,span,td,p,strong,b,legend')) {
+            if (!el.offsetParent) continue;
+            if (!/^real estate owned\b/i.test(lfOwnText(el))) continue;
+            // climb to a container that actually holds the property table
+            let p = el;
+            for (let i = 0; i < 6 && p; i++) {
+                if (p.querySelector && p.querySelector('a')) { section = p; break; }
+                p = p.parentElement;
+            }
+            if (section) break;
+        }
+        if (!section) return;
+
+        section.querySelectorAll('a').forEach(link => {
+            if (link.dataset.lfReCopy === '1') return;
+            const addr = (link.textContent || '').replace(/\s+/g, ' ').trim();
+            // an address has a number and a comma; this also rules out "Add", "Edit", etc.
+            if (addr.length < 8 || !/\d/.test(addr) || !addr.includes(',')) return;
+            if (/^(add|edit|remove|delete|read more)$/i.test(addr)) return;
+
+            link.dataset.lfReCopy = '1';
+            const b = document.createElement('button');
+            b.className = 'lf-icon-btn lf-re-copy';
+            b.type = 'button';
+            b.title = 'Copy the property address';
+            b.innerHTML = COPY_SVG;
+            b.onclick = async (e) => {
+                e.preventDefault(); e.stopPropagation();
+                try {
+                    await navigator.clipboard.writeText(addr);
+                    b.innerHTML = CHECK_SVG; b.style.color = '#28a745';
+                    showToast('Copied: ' + addr);
+                    setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
+                } catch (err) { showToast('Copy failed'); }
+            };
+            // sibling of the link, never inside it
+            if (link.parentNode) link.parentNode.insertBefore(b, link.nextSibling);
+        });
     }
 
     // ==========================================
@@ -2927,7 +3120,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.27</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.35</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -3655,15 +3848,9 @@
         });
         menuObserver.observe(document.body, { childList: true, subtree: true });
 
-        // ==========================================
-        // v100.9.27: LOAN SUMMARY WATCHER
-        // The panel's content arrives after the modal element itself, so a single
-        // pass on open is not enough. This reacts to the modal appearing AND to its
-        // content changing, batched through requestAnimationFrame, then re-checks on
-        // a short ladder while the panel settles. Result: the copy buttons are there
-        // as soon as there is anything to attach them to, and they are re-asserted
-        // for as long as the panel stays open.
-        // ==========================================
+        // v100.9.28: the panel's contents arrive after the panel element itself, so
+        // react to it appearing AND to its contents changing, then re-check on a
+        // short ladder while it settles.
         let lfModalPassQueued = false;
         function lfQueueModalPass() {
             if (lfModalPassQueued) return;
@@ -3678,15 +3865,12 @@
 
         new MutationObserver((muts) => {
             for (const m of muts) {
-                // content of an open panel changed
                 if (m.target && m.target.closest && m.target.closest(LF_MODAL_SEL)) { lfQueueModalPass(); return; }
-                // a panel (or something inside one) was just added
                 for (const n of m.addedNodes) {
                     if (n.nodeType !== 1) continue;
                     if ((n.matches && n.matches(LF_MODAL_SEL)) || (n.closest && n.closest(LF_MODAL_SEL)) ||
                         (n.querySelector && n.querySelector(LF_MODAL_SEL))) {
                         lfQueueModalPass();
-                        // the body of the summary loads in stages - catch each one
                         [40, 120, 250, 500, 900].forEach(ms => setTimeout(() => {
                             try { lfInjectModalCopyButtons(); } catch (e) {}
                         }, ms));
@@ -3696,7 +3880,6 @@
             }
         }).observe(document.body, { childList: true, subtree: true, characterData: true });
 
-        // first pass in case a panel is already open when the script starts
         lfQueueModalPass();
 
         // ==========================================
@@ -4044,8 +4227,8 @@
                 });
             } catch (e) { console.error("[LF Optimizer] Employment isolated label error:", e); }
 
-            // 3+4. Loan summary / modal copy buttons (v100.9.27: own function)
-            try { lfInjectModalCopyButtons(); } catch (e) { console.error("[LF Optimizer] Modal copy button error:", e); }
+            // 3+4. Loan summary copy buttons (v100.9.28)
+            try { lfInjectModalCopyButtons(); } catch (e) { console.error('[LF Optimizer] Modal copy button error:', e); }
 
         }, 1000);
 
@@ -4058,10 +4241,9 @@
             // window BEFORE the user ever pastes, so arming can't wait for a paste event.
             try { isCleanPasteSuspended(); } catch (err) {}
 
-            // v100.9.27: modal copy buttons run BEFORE the selection guard. The
-            // function only inserts what is missing, so during a selection it does
-            // nothing at all - but it means a button lost to a re-render is restored
-            // within 500ms instead of waiting on the 1s loop.
+            // v100.9.28: before the selection guard on purpose. Nothing is inserted
+            // unless a button is actually missing, so this is inert during a
+            // selection - but a button lost to a re-render returns within 500ms.
             try { lfInjectModalCopyButtons(); } catch (err) {}
 
             if (lfSelectionBusy()) return;   // v100.8.92
@@ -4078,6 +4260,7 @@
 
             // 0.9 "Pop-up" button on the Escalation desk loan summary (v100.8.84)
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
+            try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
 
             // 1.0 Escalation desk copy buttons: borrower name + loan number (v100.8.85)
             try { lfEscInjectCopyButtons(); } catch (err) {}
@@ -4143,16 +4326,9 @@
                 if (oMod && (oMod.textContent.toUpperCase().includes('LOAN SUMMARY') || oMod.textContent.toUpperCase().includes('BORROWER INFORMATION'))) {
                     const mContent = oMod.querySelector('.modal-content');
                     if (mContent && !mContent.textContent.includes('Loading...')) {
-                        let ltv = '', tLoan = null;
-                        Array.from(mContent.querySelectorAll('td, th, dt, dd, span, div, strong, b, label')).forEach(el => {
-                            if (el.children.length > 1) return;
-                            const t = (el.textContent||'').toLowerCase().trim();
-                            if (t === 'ltv' || t === 'ltv:') { let v = el.nextElementSibling; if(!v && el.tagName==='TD'){const tr=el.closest('tr'); if(tr&&tr.cells.length>el.cellIndex+1)v=tr.cells[el.cellIndex+1];} if(v) ltv=v.textContent.replace(/📋|✅/g,'').trim(); }
-                            if (t === 'total loan amount' || t === 'total loan amount:') { let v = el.nextElementSibling; if(!v && el.tagName==='TD'){const tr=el.closest('tr'); if(tr&&tr.cells.length>el.cellIndex+1)v=tr.cells[el.cellIndex+1];} if(v) tLoan=v; }
-                        });
-                        if (ltv && tLoan && !tLoan.querySelector('.lf-ltv-appended')) {
-                            const s = document.createElement('span'); s.className = 'lf-ltv-appended'; s.innerText = ` - LTV: ${ltv}`; s.style.fontWeight = 'bold'; tLoan.appendChild(s);
-                        }
+                        // v100.9.29: LTV is calculated now, and the Total row also
+                        // carries the downpayment.
+                        try { lfApplyLtvAndDownpayment(mContent); } catch (err) {}
                         localStorage.setItem('lf_saved_summary', mContent.innerHTML);
                     }
                 }
