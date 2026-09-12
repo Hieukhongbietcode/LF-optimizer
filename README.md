@@ -1,6 +1,6 @@
 # Loan Factory Optimizer
 
-![Version](https://img.shields.io/badge/version-100.9.28-blue)
+![Version](https://img.shields.io/badge/version-100.9.35-blue)
 ![Userscript](https://img.shields.io/badge/type-userscript-orange)
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
@@ -8,8 +8,6 @@
 A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, one-click copying, and editor conveniences.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
-
-![Pipeline with the script running](docs/images/00-overview.png)
 
 ---
 
@@ -52,9 +50,6 @@ Pick the store that matches your browser:
 | **Chrome** | [Chrome Web Store](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) |
 | **Edge** | [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) |
 
-![Tampermonkey in the browser toolbar](docs/images/01-tampermonkey-icon.png)
-
-After installing, pin the Tampermonkey icon to your toolbar — you'll need it for updates.
 
 **Using Firefox? Skip to [Step 3](#step-3--install-the-script).** Steps 2 applies only to Chrome and Edge.
 
@@ -74,23 +69,17 @@ Chrome and Edge require an extra permission before Tampermonkey is allowed to ru
 - Chrome: top-right corner
 - Edge: bottom-left corner
 
-![Developer mode toggle](docs/images/02-developer-mode.png)
+<img width="1536" height="651" alt="image" src="https://github.com/user-attachments/assets/fde88e92-8a9c-460c-8a62-819b8d1f7492" />
 
 **2.3** Find Tampermonkey and click **Details**
 
-![Extension details button](docs/images/03-details-button.png)
+<img width="553" height="429" alt="image" src="https://github.com/user-attachments/assets/d9c36649-bb21-4317-ae6e-d9cba45d0376" />
 
-**2.4** Turn on **Allow User Scripts**
+**2.4** Turn on **Allow User Scripts** & Pin to toolbar, and Set **Site access** to **On all sites**
 
-![Allow User Scripts toggle](docs/images/04-allow-user-scripts.png)
+<img width="901" height="409" alt="image" src="https://github.com/user-attachments/assets/4d63b72a-3032-407f-93a6-1d03c41ce28c" />
 
-**2.5** Set **Site access** to **On all sites**
-
-If this is set to "On click", the script will not run automatically.
-
-![Site access setting](docs/images/05-site-access.png)
-
-**2.6** **Quit the browser completely and reopen it**
+**2.5** **Quit the browser completely and reopen it**
 
 Close every window — not just the tab. The permission is only registered when the browser starts, so reloading the page is not enough. This step is skipped often and it matters.
 
@@ -102,7 +91,7 @@ Click this link. Tampermonkey will show an installation page:
 
 ### [→ Install loan-factory-optimizer.user.js](../../raw/main/loan-factory-optimizer.user.js)
 
-![Tampermonkey install page](docs/images/06-install-page.png)
+<img width="1725" height="585" alt="image" src="https://github.com/user-attachments/assets/c36b29f1-4728-4ae8-9818-314af92534b2" />
 
 Click **Install**.
 
@@ -118,15 +107,15 @@ Open Loan Factory and go to your pipeline. You should see:
 - Small copy buttons beside borrower names and loan numbers
 - A **palette icon** in the top bar, which opens the settings panel
 
-![The palette icon in the Loan Factory top bar](docs/images/07-palette-icon.png)
+<img width="1415" height="150" alt="image" src="https://github.com/user-attachments/assets/60f5e38d-c286-4774-a92b-852dc1c87546" />
 
 To confirm precisely, press **F12** to open the browser console. You should see:
 
 ```
-[LF Optimizer] v100.9.28 loaded
+[LF Optimizer] v100.9.35 loaded
 ```
 
-![Console confirmation](docs/images/08-console-loaded.png)
+<img width="995" height="386" alt="image" src="https://github.com/user-attachments/assets/c4f127d9-1741-45bb-bc57-e3f450e3ac8d" />
 
 If that line is missing, go to [Troubleshooting](#troubleshooting).
 
@@ -136,7 +125,7 @@ If that line is missing, go to [Troubleshooting](#troubleshooting).
 
 Click the **Tampermonkey icon** → **Utilities** → **Check for userscript updates**.
 
-![Check for userscript updates](docs/images/09-check-updates.png)
+<img width="761" height="465" alt="image" src="https://github.com/user-attachments/assets/8f47f8ce-31e1-493c-bc47-4184a4a370c9" />
 
 If a newer version exists, Tampermonkey shows it and installs it on confirmation.
 
@@ -149,8 +138,8 @@ If a newer version exists, Tampermonkey shows it and installs it on confirmation
 ## Features
 
 Everything is configured from the **palette icon** in the Loan Factory top bar.
+<img width="338" height="940" alt="image" src="https://github.com/user-attachments/assets/6df15e74-6289-4e96-b358-727a2a48de54" />
 
-![The settings panel](docs/images/10-settings-panel.png)
 
 ### Pipeline
 
