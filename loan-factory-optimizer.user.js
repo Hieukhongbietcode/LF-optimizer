@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 11th, 2026
+// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 14th, 2026
 // @namespace    http://tampermonkey.net/
-// @version      100.9.35
+// @version      100.9.40
 // @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -16,7 +16,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.35 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.40 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -2292,6 +2292,55 @@
             /* v100.9.21: red caution text on the system-notice option */
             .lf-warn-caution { color: #dc2626; font-weight: 700; }
 
+            /* v100.9.36: to-do list drag & drop upload */
+            /* v100.9.39: quieter by default so a long list does not look busy - the
+               box only asserts itself when a file is actually over it. */
+            /* the cell only needs to be a positioning context - it stays a table cell */
+            td.lf-drop-cell { position: relative; }
+
+            .lf-drop-box {
+                position: absolute; left: 6px; right: 6px; bottom: 6px;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                gap: 3px;
+                box-sizing: border-box;
+                padding: 6px;
+                overflow: hidden;
+                border: 1px dashed rgba(100, 116, 139, .45);
+                border-radius: 7px;
+                background: transparent;
+                color: rgba(71, 85, 105, .75);
+                font-size: 10px; font-weight: 600; letter-spacing: .1px; line-height: 1.25;
+                text-align: center; cursor: pointer; user-select: none;
+                min-height: 30px;
+                transition: border-color .15s ease, background .15s ease, color .15s ease;
+            }
+            .lf-drop-box svg { opacity: .55; transition: opacity .15s ease, transform .15s ease; }
+            .lf-drop-box .lf-drop-text { pointer-events: none; }
+
+            .lf-drop-box:hover {
+                border-color: #6366f1;
+                background: rgba(99, 102, 241, .06);
+                color: #4f46e5;
+            }
+            .lf-drop-box:hover svg { opacity: 1; }
+
+            .lf-drop-box.lf-drop-over {
+                border: 1.5px solid #4f46e5;
+                background: rgba(99, 102, 241, .14);
+                color: #3730a3;
+                box-shadow: inset 0 0 0 3px rgba(99, 102, 241, .08);
+            }
+            .lf-drop-box.lf-drop-over svg { opacity: 1; transform: translateY(-2px); }
+
+            .lf-drop-box.lf-drop-busy { opacity: .55; cursor: progress; }
+
+            .lf-drop-box.lf-drop-ok {
+                border: 1.5px solid #16a34a;
+                background: rgba(22, 163, 74, .12);
+                color: #15803d;
+            }
+            .lf-drop-box.lf-drop-ok svg { opacity: 1; }
+
             /* v100.9.20: Default Text Style presets */
             .lf-dt-preset {
                 display: inline-flex; align-items: center; gap: 5px;
@@ -2941,6 +2990,159 @@
     }
 
     // ==========================================
+    // TO-DO LIST: DRAG & DROP UPLOAD (v100.9.36)
+    //
+    // Each to-do row has an "Upload" button that opens the operating system file
+    // picker. This puts a small drop box under that button so a file can go straight
+    // from the desktop into that exact condition.
+    //
+    // How the file reaches the portal: the row's own <input type="file"> is filled in
+    // with a DataTransfer and given a change event, which is indistinguishable from
+    // the user having picked the file by hand. When the input is not in the row, the
+    // Upload button is clicked with HTMLInputElement.prototype.click borrowed for a
+    // moment - that captures the input the app was about to open a dialog for and
+    // swallows the dialog, so nothing flashes on screen.
+    // ==========================================
+    function lfTodoFindRowFileInput(scope) {
+        return scope.querySelector('input[type="file"]');
+    }
+
+    // Press the Upload button but keep the OS dialog from appearing, and hand back
+    // whichever file input the app tried to open.
+    function lfTodoCaptureFileInput(triggerBtn) {
+        const proto = HTMLInputElement.prototype;
+        const orig = proto.click;
+        let captured = null;
+        proto.click = function () {
+            if (this.type === 'file') { captured = this; return; }
+            return orig.apply(this, arguments);
+        };
+        try { triggerBtn.click(); } catch (e) {}
+        proto.click = orig;
+        return captured;
+    }
+
+    async function lfTodoDeliverFiles(box, files) {
+        if (!files || !files.length) return;
+        const cell = box.closest('td') || box.parentElement;
+        const row  = box.closest('tr') || cell;
+
+        let input = lfTodoFindRowFileInput(cell) || lfTodoFindRowFileInput(row);
+        if (!input) {
+            const btn = (box.dataset.lfBtnIdx && row)
+                ? row.querySelectorAll('button, a, .btn')[+box.dataset.lfBtnIdx]
+                : null;
+            const trigger = btn || Array.from(row.querySelectorAll('button, a, .btn'))
+                .find(b => /^upload$/i.test((b.textContent || '').trim()));
+            if (trigger) input = lfTodoCaptureFileInput(trigger);
+        }
+
+        if (!input) {
+            showToast('Could not find the upload field for this row');
+            box.classList.remove('lf-drop-busy');
+            return;
+        }
+
+        try {
+            const dt = new DataTransfer();
+            for (const f of files) dt.items.add(f);
+            if (!input.multiple && dt.files.length > 1) {
+                showToast('This condition takes one file at a time \u2013 sending the first');
+            }
+            input.files = dt.files;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            box.classList.add('lf-drop-ok');
+            const okText = files.length > 1
+                ? files.length + ' files sent'
+                : (files[0].name.length > 18 ? files[0].name.slice(0, 16) + '\u2026' : files[0].name);
+            box.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                          + '<span class="lf-drop-text">' + okText + '</span>';
+            box.title = files.length > 1 ? files.length + ' files sent' : files[0].name;
+            showToast('Uploading ' + (files.length > 1 ? files.length + ' files' : files[0].name));
+            setTimeout(() => {
+                box.classList.remove('lf-drop-ok');
+                box.innerHTML = lfDropBoxContent(LF_DROP_LABEL);
+            }, 2600);
+        } catch (e) {
+            showToast('Upload failed \u2013 use the Upload button instead');
+            console.error('[LF Optimizer] drop upload failed:', e);
+        }
+        box.classList.remove('lf-drop-busy');
+    }
+
+    const LF_DROP_LABEL = 'Drop file(s) here';
+    const LF_DROP_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
+    function lfDropBoxContent(text) { return LF_DROP_ICON + '<span class="lf-drop-text">' + text + '</span>'; }
+
+    // v100.9.40: the box is positioned absolutely inside the cell, so it fills the
+    // space the row already has and can never add to it. The old version measured the
+    // row and set a height - but the box lives inside that row, so every pass made the
+    // row taller and the box grew without end. All that is set here is where the box
+    // starts, just under the Upload button.
+    function lfSizeTodoDropZones() {
+        document.querySelectorAll('.lf-drop-box').forEach(box => {
+            const cell = box.closest('td');
+            if (!cell) return;
+            const trigger = cell.querySelector('button, a, .btn');
+            const top = trigger ? (trigger.offsetTop + trigger.offsetHeight + 6) : 6;
+            const want = top + 'px';
+            if (box.style.top !== want) box.style.top = want;
+        });
+    }
+
+    function lfInjectTodoDropZones() {
+        // Only on a to-do list, and only in the Upload column
+        const tables = document.querySelectorAll('table');
+        tables.forEach(table => {
+            const heads = Array.from(table.querySelectorAll('thead th, thead td'));
+            const upIdx = heads.findIndex(h => /^upload$/i.test((h.textContent || '').trim()));
+            if (upIdx < 0) return;
+
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const cell = row.cells && row.cells[upIdx];
+                if (!cell || cell.dataset.lfDropDone === '1') return;
+                const btns = Array.from(row.querySelectorAll('button, a, .btn'));
+                const trigger = Array.from(cell.querySelectorAll('button, a, .btn'))
+                    .find(b => /^upload$/i.test((b.textContent || '').trim()));
+                if (!trigger) return;
+
+                cell.dataset.lfDropDone = '1';
+                cell.classList.add('lf-drop-cell');
+                const box = document.createElement('div');
+                box.className = 'lf-drop-box';
+                box.textContent = LF_DROP_LABEL;
+                box.title = 'Drag a file from your computer straight into this condition';
+                box.dataset.lfBtnIdx = String(btns.indexOf(trigger));
+
+                ['dragenter', 'dragover'].forEach(ev => box.addEventListener(ev, (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'copy';
+                    box.classList.add('lf-drop-over');
+                }));
+                ['dragleave', 'dragend'].forEach(ev => box.addEventListener(ev, (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    box.classList.remove('lf-drop-over');
+                }));
+                box.addEventListener('drop', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    box.classList.remove('lf-drop-over');
+                    box.classList.add('lf-drop-busy');
+                    const files = e.dataTransfer && e.dataTransfer.files;
+                    lfTodoDeliverFiles(box, files);
+                });
+                // clicking it behaves like the Upload button, for convenience
+                box.addEventListener('click', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    try { trigger.click(); } catch (err) {}
+                });
+
+                trigger.parentNode.insertBefore(box, trigger.nextSibling);
+            });
+        });
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
@@ -3120,7 +3322,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.35</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.40</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -4261,6 +4463,8 @@
             // 0.9 "Pop-up" button on the Escalation desk loan summary (v100.8.84)
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
+            try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
+            try { lfSizeTodoDropZones(); } catch (err) {}            // v100.9.38
 
             // 1.0 Escalation desk copy buttons: borrower name + loan number (v100.8.85)
             try { lfEscInjectCopyButtons(); } catch (err) {}
