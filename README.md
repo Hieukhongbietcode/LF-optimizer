@@ -1,11 +1,11 @@
 # Loan Factory Optimizer
 
-![Version](https://img.shields.io/badge/version-100.9.35-blue)
+![Version](https://img.shields.io/badge/version-100.9.40-blue)
 ![Userscript](https://img.shields.io/badge/type-userscript-orange)
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
 
-A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, one-click copying, and editor conveniences.
+A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, drag-and-drop uploads, one-click copying, and editor conveniences.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
 
@@ -114,7 +114,7 @@ Open Loan Factory and go to your pipeline. You should see:
 To confirm precisely, press **F12** to open the browser console. You should see:
 
 ```
-[LF Optimizer] v100.9.35 loaded
+[LF Optimizer] v100.9.40 loaded
 ```
 
 <img width="995" height="386" alt="image" src="https://github.com/user-attachments/assets/c4f127d9-1741-45bb-bc57-e3f450e3ac8d" />
@@ -154,6 +154,14 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 | **Column sorting** | Sort liabilities and employment tables by any column |
 | **Liabilities copier** | Copies the liabilities table, automatically skipping empty $0/$0 rows |
 | **Loan Summary pop-out** | Opens the summary in its own window, with working copy buttons |
+
+### To-do lists
+
+| Feature | What it does |
+|---|---|
+| **Drag & drop upload** | A drop box under every **Upload** button. Drag a file from your desktop onto it and it goes straight into that condition — no file picker, no folder browsing |
+
+The box fits whatever height the row has, stays quiet until you need it, and shows a green tick with the file name once the file is on its way. Several files can be dropped at once where the condition accepts them. Clicking the box still opens the normal file picker.
 
 ### Loan Summary
 
@@ -269,6 +277,12 @@ Then open your extensions page and check the ID shown there. **If the two IDs di
 
 If this keeps happening after restarts, switch to Firefox. It's a Manifest V3 limitation in Chrome and Edge that affects large scripts.
 
+### Drag & drop upload isn't working
+
+- Drop the file **onto the dashed box**, not onto the Upload button
+- If the portal shows a confirmation dialog after the drop, finish it as usual — the script only fills in the file
+- Clicking the box opens the normal file picker, so that route always remains available
+
 ### One feature stopped working
 
 Turn it off and on again in the settings panel. If that doesn't help, note which page you were on and what you clicked — the console usually logs something useful.
@@ -304,6 +318,9 @@ Chrome and Edge reset the "Allow User Scripts" permission when they update. Turn
 
 **Why is the LTV different from the portal's own LTV field?**
 This one is calculated against the appraised value, so it stays correct even when the portal's field is stale or empty.
+
+**Is the drag & drop upload doing anything unusual to my files?**
+No. The file is placed into the portal's own upload field and the portal handles it from there — exactly as if you had picked it with the file dialog.
 
 ---
 
