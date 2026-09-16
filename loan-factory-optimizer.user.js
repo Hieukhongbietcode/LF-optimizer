@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 14th, 2026
+// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 16th, 2026
 // @namespace    http://tampermonkey.net/
-// @version      100.9.40
+// @version      100.9.45
 // @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -16,7 +16,67 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.40 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.45 loaded', 'color:#f36f20;font-weight:bold;');
+
+    // ==========================================
+    // DESIGN TOKENS (v100.9.41)
+    // One place for the colours, radii and type sizes this script paints with.
+    // Before this there were five different greens all meaning "done" and four reds
+    // all meaning "careful", which read as slightly-off rather than deliberate.
+    //
+    // NOT included here on purpose: the pipeline row palettes, the borrower-name
+    // colour, the Resubmit chip green, the disclose-due pink, the LTV gradient and
+    // the Jake preset. Those are choices that were asked for specifically, or that
+    // users pick themselves - they are values, not styling.
+    // ==========================================
+    const LFC = {
+        brand:      '#f36f20',
+        brandDark:  '#d95707',
+        ok:         '#16a34a',
+        okDark:     '#15803d',
+        okBg:       'rgba(22, 163, 74, .12)',
+        danger:     '#dc2626',
+        dangerDark: '#b91c1c',
+        warn:       '#f59e0b',
+        info:       '#2563eb',
+        ink:        '#334155',
+        inkSoft:    '#64748b',
+        muted:      '#94a3b8',
+        line:       '#e2e8f0',
+        lineStrong: '#cbd5e1',
+        surface:    '#ffffff',
+        surfaceAlt: '#f8fafc'
+    };
+    const LFR = { sm: '4px', md: '6px', lg: '10px', pill: '999px' };
+
+    // ==========================================
+    // WORKING HOURS BY REGION (v100.9.45)
+    // The SLA clock only advances during working hours, and those hours were fixed at
+    // 9-18. Everything is stated in Pacific because that is the clock the portal's
+    // timestamps are already on - picking "East Coast" therefore means 6 AM - 3 PM
+    // Pacific, which is a 9-5 day on the east coast. No timezone conversion happens,
+    // so nothing else in the script has to change.
+    // ==========================================
+    const LF_TT_SHIFTS = {
+        east:     { label: 'East Coast',  start: 6,  end: 15, note: '6:00 AM \u2013 3:00 PM PST' },
+        central:  { label: 'Central',     start: 7,  end: 16, note: '7:00 AM \u2013 4:00 PM PST' },
+        mountain: { label: 'Mountain',    start: 8,  end: 17, note: '8:00 AM \u2013 5:00 PM PST' },
+        west:     { label: 'West Coast',  start: 9,  end: 18, note: '9:00 AM \u2013 6:00 PM PST' }
+    };
+    const LF_TT_SHIFT_KEY = 'lf_tt_shift';
+
+    function lfTtShift() {
+        const k = localStorage.getItem(LF_TT_SHIFT_KEY);
+        return LF_TT_SHIFTS[k] ? LF_TT_SHIFTS[k] : LF_TT_SHIFTS.west;   // unchanged default
+    }
+    function lfTtShiftKey() {
+        const k = localStorage.getItem(LF_TT_SHIFT_KEY);
+        return LF_TT_SHIFTS[k] ? k : 'west';
+    }
+    function lfTtCountedNote() {
+        const sh = lfTtShift();
+        return 'Counted Mon\u2013Fri, ' + sh.note + ' only (' + sh.label + ').';
+    }
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -433,7 +493,7 @@
                 // v100.8.93: the popped-out window had no feedback - show the tick,
                 // then restore the copy icon, exactly like in the main page.
                 btn.innerHTML = LF_CHECK_SVG;
-                btn.style.color = '#28a745';
+                btn.style.color = '#16a34a';
                 setTimeout(() => { btn.innerHTML = LF_COPY_SVG; btn.style.color = ''; }, 1000);
             });
         ` + "\n</scr" + "ipt>";
@@ -490,11 +550,11 @@
         btn.type = 'button';
         btn.textContent = '\u29C9 Pop-up';
         btn.title = 'Open this loan summary in its own window';
-        btn.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:4px 12px; background:#28a745; color:#ffffff; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; z-index:2147483000;';
-        btn.onmouseenter = () => { btn.style.background = '#218838'; };
-        btn.onmouseleave = () => { btn.style.background = '#28a745'; };
-        btn.onmouseenter = () => { btn.style.background = '#218838'; };
-        btn.onmouseleave = () => { btn.style.background = '#28a745'; };
+        btn.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:4px 12px; background:#16a34a; color:#ffffff; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; z-index:2147483000;';
+        btn.onmouseenter = () => { btn.style.background = '#15803d'; };
+        btn.onmouseleave = () => { btn.style.background = '#16a34a'; };
+        btn.onmouseenter = () => { btn.style.background = '#15803d'; };
+        btn.onmouseleave = () => { btn.style.background = '#16a34a'; };
         btn.onclick = (e) => {
             e.preventDefault(); e.stopPropagation();
             // v100.8.85: use the richest content available. `.modal-content` is what the
@@ -694,7 +754,7 @@
         // v100.8.90: no user-select:none here. A drag-selection that crosses an
         // unselectable element gets cut short, which is one way the highlight was
         // being lost while selecting a loan number next to these chips.
-        t.style.cssText = `display:inline-block; margin-left:5px; padding:2px 8px; border-radius:10px; background:${bg}; color:#ffffff; font-size:10.5px; font-weight:700; line-height:1.5; white-space:nowrap; vertical-align:middle; overflow:visible; max-width:none; flex:none;`;
+        t.style.cssText = `display:inline-block; margin-left:5px; padding:2px 8px; border-radius:10px; background:${bg}; color:#ffffff; font-size:11px; font-weight:700; line-height:1.5; white-space:nowrap; vertical-align:middle; overflow:visible; max-width:none; flex:none;`;
         return t;
     }
 
@@ -864,7 +924,7 @@
         const b = document.getElementById('lf-ds-bulk-btn');
         if (!b) return;
         b.textContent = running ? `\u23F9 Stop updating (${n})` : '\u21bb Update assigned time for all tickets';
-        b.style.background = running ? '#dc3545' : '#f36f20';
+        b.style.background = running ? '#dc2626' : '#f36f20';
     }
 
     function lfDsBulkUpdate() {
@@ -960,7 +1020,7 @@
             summary: '<div><b>Standard:</b> 8 hours</div>'
                    + '<div><b>Rush:</b> 5 hours</div>'
                    + '<div><b>Income review:</b> 3 hours</div>'
-                   + '<div class="lf-tt-note">Counted Mon\u2013Fri, 9:00\u201318:00 only.</div>',
+                   + '<div class="lf-tt-note lf-tt-counted"></div>',
             hours: (rowText) => {
                 // Income review is 3 hours regardless of Rush
                 const isRush = /Rush/i.test(rowText), isInc = /Income Review/i.test(rowText);
@@ -974,7 +1034,7 @@
             summary: '<div><b>Standard:</b> 4 hours</div>'
                    + '<div><b>Resubmit (re-disclose):</b> 6 hours</div>'
                    + '<div class="lf-tt-note">Counted from the <b>assign time</b> \u2013 the oldest "Ticket\'s owner" entry in Action \u2192 Audit log.</div>'
-                   + '<div class="lf-tt-note">Counted Mon\u2013Fri, 9:00\u201318:00 only.</div>',
+                   + '<div class="lf-tt-note lf-tt-counted"></div>',
             // v100.9.30: a re-disclosure gets 6 business hours; everything else 4.
             // Detected with the same pattern that draws the green "Resubmit" chip, so
             // the two can never disagree.
@@ -1238,7 +1298,7 @@
     // GLOBAL SHARED UTILITIES & CONSTANTS
     // ==========================================
     const COPY_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-    const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="#28a745" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    const CHECK_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="#16a34a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
     const SAVE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`;
     // v100.8.35: crisp SVG sort arrows (same stroke style as the copy icon)
     const SORT_NEUTRAL_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 9 12 5 16 9"></polyline><polyline points="8 15 12 19 16 15"></polyline></svg>`;
@@ -1264,6 +1324,9 @@
 
     // v100.8.35: upgraded toast - bottom-right, stacks up to 4, check icon,
     // orange accent, site font, truncates long copied text.
+    // v100.9.41: repeating the same message now bumps a counter on the toast that is
+    // already showing, instead of stacking four near-identical cards. Copying three
+    // fields in a row reads as "Copied: 1234  x3" rather than a wall of toasts.
     function showToast(message) {
         let stack = document.getElementById('lf-toast-stack');
         if (!stack) {
@@ -1275,20 +1338,42 @@
         let msg = String(message);
         if (msg.length > MAX) msg = msg.slice(0, MAX - 1) + '\u2026';
 
+        // same message still on screen? just count it
+        const last = stack.lastElementChild;
+        if (last && last.dataset.lfMsg === msg && last.classList.contains('show')) {
+            const n = (+last.dataset.lfCount || 1) + 1;
+            last.dataset.lfCount = String(n);
+            let badge = last.querySelector('.lf-toast2-count');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'lf-toast2-count';
+                last.appendChild(badge);
+            }
+            badge.textContent = '\u00d7' + n;
+            clearTimeout(+last.dataset.lfTimer);
+            last.dataset.lfTimer = String(setTimeout(() => {
+                last.classList.remove('show');
+                setTimeout(() => { if (last.parentNode) last.remove(); }, 300);
+            }, 2200));
+            return;
+        }
+
         const toast = document.createElement('div');
         toast.className = 'lf-toast2';
+        toast.dataset.lfMsg = msg;
+        toast.dataset.lfCount = '1';
         toast.innerHTML = `<span class="lf-toast2-icon">${CHECK_SVG}</span><span class="lf-toast2-msg"></span>`;
         toast.querySelector('.lf-toast2-msg').textContent = msg;
         stack.appendChild(toast);
 
-        // Keep at most 4 stacked toasts
-        while (stack.children.length > 4) stack.removeChild(stack.firstChild);
+        // Keep at most 3 stacked toasts
+        while (stack.children.length > 3) stack.removeChild(stack.firstChild);
 
         requestAnimationFrame(() => toast.classList.add('show'));
-        setTimeout(() => {
+        toast.dataset.lfTimer = String(setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
-        }, 2200);
+        }, 2200));
     }
 
     function getCleanText(el) {
@@ -2177,7 +2262,7 @@
 
             /* Toast stack (v100.8.35) */
             #lf-toast-stack { position: fixed; bottom: 24px; right: 24px; z-index: 100001; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
-            .lf-toast2 { display: flex; align-items: center; gap: 9px; background: #ffffff; color: #333; border: 1px solid #e5e7eb; border-left: 4px solid #f36f20; border-radius: 8px; padding: 10px 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); font-family: inherit; font-size: 13px; font-weight: 600; max-width: 380px; opacity: 0; transform: translateY(10px); transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: auto; }
+            .lf-toast2 { display: flex; align-items: center; gap: 9px; background: #ffffff; color: #333; border: 1px solid #e5e7eb; border-left: 4px solid #f36f20; border-radius: 10px; padding: 10px 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); font-family: inherit; font-size: 13px; font-weight: 600; max-width: 380px; opacity: 0; transform: translateY(10px); transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: auto; }
             .lf-toast2.show { opacity: 1; transform: translateY(0); }
             .lf-toast2 .lf-toast2-icon { flex-shrink: 0; display: inline-flex; align-items: center; }
             .lf-toast2 .lf-toast2-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2227,7 +2312,7 @@
             .lf-swatch-picker::before { content: "🎨"; font-size: 9px; color: white; pointer-events: none; }
 
             /* Modern Settings UI */
-            .lf-settings-card { margin-top: 15px; padding: 16px; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+            .lf-settings-card { margin-top: 15px; padding: 16px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
             .lf-settings-title { font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px; }
             .lf-switch-wrapper { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 4px 0; margin-bottom: 0; }
             .lf-switch-label { font-size: 13px; font-weight: 600; color: #4b5563; }
@@ -2245,7 +2330,7 @@
                preview out of view. Only this card's container is raised. */
             #lf-dt-container.visible { max-height: 460px; }
             /* v100.8.75: the multi-line rule summary needs more room than the shared ceiling */
-            #lf-tt-container.visible { max-height: 340px; }
+            #lf-tt-container.visible { max-height: 420px; }
             .lf-hours-inner { background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 8px; }
             /* v100.8.49: borrower name-color swatches */
             .lf-name-color-swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -2292,6 +2377,72 @@
             /* v100.9.21: red caution text on the system-notice option */
             .lf-warn-caution { color: #dc2626; font-weight: 700; }
 
+            /* v100.9.43: neon ring that travels clockwise around the marked result.
+               The colours move around the border rather than the whole badge changing
+               colour at once - the angle of a conic gradient is animated, so the ring
+               itself stays still while the light runs around it. */
+            @property --lf-gs-angle {
+                syntax: '<angle>';
+                initial-value: 0deg;
+                inherits: false;
+            }
+            @keyframes lf-gs-spin { to { --lf-gs-angle: 360deg; } }
+            /* fallback for engines without @property: rotate the layer instead */
+            @keyframes lf-gs-spin-fallback { to { transform: rotate(360deg); } }
+            @keyframes lf-gs-pulse { 50% { opacity: .75; } }
+
+            .lf-gs-active {
+                position: relative !important;
+                border-radius: 6px;
+                z-index: 0;
+                scroll-margin: 12px;
+            }
+            /* the crisp ring */
+            .lf-gs-active::before {
+                content: '';
+                position: absolute;
+                inset: -3px;
+                border-radius: 9px;
+                padding: 2px;
+                background: conic-gradient(from var(--lf-gs-angle),
+                    #ff0066, #ff8c00, #ffe600, #00e676, #00b0ff, #7c4dff, #ff0066);
+                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                -webkit-mask-composite: xor;
+                mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                mask-composite: exclude;
+                animation: lf-gs-spin 1.8s linear infinite;
+                pointer-events: none;
+                z-index: -1;
+            }
+            /* The soft neon bleed. It is masked into a ring as well, with the hole
+               lined up on the badge's own edge, so the glow stays outside and the
+               LOAN / LEAD / APPLICATION text keeps its normal background. */
+            .lf-gs-active::after {
+                content: '';
+                position: absolute;
+                inset: -6px;
+                border-radius: 12px;
+                padding: 6px;
+                background: conic-gradient(from var(--lf-gs-angle),
+                    #ff0066, #ff8c00, #ffe600, #00e676, #00b0ff, #7c4dff, #ff0066);
+                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                -webkit-mask-composite: xor;
+                mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                mask-composite: exclude;
+                filter: blur(4px);
+                opacity: .6;
+                animation: lf-gs-spin 1.8s linear infinite, lf-gs-pulse 1.8s ease-in-out infinite;
+                pointer-events: none;
+                z-index: -2;
+            }
+
+            /* v100.9.41: repeat counter on a coalesced toast */
+            .lf-toast2-count {
+                margin-left: 8px; padding: 1px 7px;
+                background: rgba(255,255,255,.22); border-radius: 999px;
+                font-size: 11px; font-weight: 800; letter-spacing: .2px;
+            }
+
             /* v100.9.36: to-do list drag & drop upload */
             /* v100.9.39: quieter by default so a long list does not look busy - the
                box only asserts itself when a file is actually over it. */
@@ -2306,7 +2457,7 @@
                 padding: 6px;
                 overflow: hidden;
                 border: 1px dashed rgba(100, 116, 139, .45);
-                border-radius: 7px;
+                border-radius: 6px;
                 background: transparent;
                 color: rgba(71, 85, 105, .75);
                 font-size: 10px; font-weight: 600; letter-spacing: .1px; line-height: 1.25;
@@ -2358,14 +2509,14 @@
             .lf-dt-tbtn { width: 30px; height: 30px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; color: #334155; display: inline-flex; align-items: center; justify-content: center; transition: all .15s ease; font-family: inherit; padding: 0; }
             .lf-dt-tbtn:hover { border-color: #f36f20; color: #f36f20; }
             .lf-dt-tbtn.on { background: #f36f20; border-color: #f36f20; color: #fff; }
-            .lf-dt-select { height: 30px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 6px; font-size: 12.5px; font-family: inherit; color: #334155; background: #fff; cursor: pointer; }
+            .lf-dt-select { height: 30px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 6px; font-size: 12px; font-family: inherit; color: #334155; background: #fff; cursor: pointer; }
             .lf-dt-select:focus { border-color: #f36f20; outline: none; }
             /* v100.8.68: font picker button + side-opening list */
-            .lf-dt-fontbtn { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex: 1; min-width: 150px; height: 30px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; font-size: 12.5px; cursor: pointer; text-align: left; }
+            .lf-dt-fontbtn { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex: 1; min-width: 150px; height: 30px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; font-size: 12px; cursor: pointer; text-align: left; }
             .lf-dt-fontbtn:hover { border-color: #f36f20; }
             .lf-dt-fontbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .lf-dt-fontlist { position: fixed; z-index: 100005; width: 240px; max-height: 340px; overflow-y: auto; background: #fff; border: 1px solid #d5d8dc; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.22); padding: 4px; font-family: inherit; }
-            .lf-dt-fontitem { padding: 7px 9px; font-size: 13px; color: #1e293b; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .lf-dt-fontlist { position: fixed; z-index: 100005; width: 240px; max-height: 340px; overflow-y: auto; background: #fff; border: 1px solid #d5d8dc; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.22); padding: 4px; font-family: inherit; }
+            .lf-dt-fontitem { padding: 7px 9px; font-size: 13px; color: #1e293b; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .lf-dt-fontitem:hover { background: #fff3ea; }
             .lf-dt-fontitem.sel { background: #f36f20; color: #fff; }
             .lf-dt-fontitem small { font-size: 10px; color: #94a3b8; font-family: inherit; }
@@ -2373,20 +2524,20 @@
             .lf-dt-swatch-btn { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 34px; height: 30px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; cursor: pointer; font-family: inherit; padding: 2px 0; transition: all .15s ease; }
             .lf-dt-swatch-btn:hover { border-color: #f36f20; }
             .lf-dt-swatch-a { font-size: 11px; font-weight: 800; line-height: 1; color: #334155; }
-            .lf-dt-swatch-bar { width: 20px; height: 5px; border-radius: 2px; border: 1px solid rgba(0,0,0,.15); }
-            .lf-dt-swatch-bar.none { background: linear-gradient(to bottom right, transparent 44%, #dc3545 44%, #dc3545 56%, transparent 56%) !important; }
+            .lf-dt-swatch-bar { width: 20px; height: 5px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); }
+            .lf-dt-swatch-bar.none { background: linear-gradient(to bottom right, transparent 44%, #dc2626 44%, #dc2626 56%, transparent 56%) !important; }
             /* Colour palette popup (mirrors the portal's own picker) */
             .lf-dt-palette { position: fixed; z-index: 100005; background: #fff; border: 1px solid #d5d8dc; border-radius: 6px; box-shadow: 0 6px 22px rgba(0,0,0,.2); padding: 0 0 8px; width: 172px; font-family: inherit; }
             .lf-dt-pal-head { text-align: center; font-size: 12px; color: #4b5563; padding: 7px 6px; border-bottom: 1px solid #e5e7eb; background: #f8fafc; border-radius: 6px 6px 0 0; }
             .lf-dt-pal-clear { display: block; width: calc(100% - 16px); margin: 8px; padding: 6px; font-size: 12px; font-weight: 700; color: #111827; background: #fff; border: 1px solid #d5d8dc; border-radius: 4px; cursor: pointer; font-family: inherit; }
             .lf-dt-pal-clear:hover { background: #f3f4f6; }
             .lf-dt-pal-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 0 8px; }
-            .lf-dt-pal-sw { width: 100%; padding-top: 100%; border-radius: 2px; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+            .lf-dt-pal-sw { width: 100%; padding-top: 100%; border-radius: 4px; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
             .lf-dt-pal-sw:hover { outline: 2px solid #f36f20; outline-offset: 1px; }
             .lf-dt-pal-sw.sel { outline: 2px solid #f36f20; outline-offset: 1px; }
-            .lf-dt-pal-custom { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 8px 8px 0; font-size: 11.5px; color: #64748b; font-weight: 600; }
+            .lf-dt-pal-custom { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 8px 8px 0; font-size: 11px; color: #64748b; font-weight: 600; }
             .lf-dt-pal-custom input { width: 34px; height: 24px; padding: 0; border: 1px solid #cbd5e1; border-radius: 4px; background: none; cursor: pointer; }
-            .lf-dt-mini { height: 30px; padding: 0 10px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 11.5px; font-weight: 600; color: #64748b; cursor: pointer; font-family: inherit; transition: all .15s ease; }
+            .lf-dt-mini { height: 30px; padding: 0 10px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 11px; font-weight: 600; color: #64748b; cursor: pointer; font-family: inherit; transition: all .15s ease; }
             .lf-dt-mini:hover { border-color: #f36f20; color: #f36f20; }
             #lf-dt-preview { border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #fff; min-height: 40px; word-break: break-word; line-height: 1.45; }
 
@@ -2403,7 +2554,7 @@
             .lf-cal-head button { background: none; border: none; font-size: 20px; line-height: 1; color: #495057; cursor: pointer; padding: 0 8px; border-radius: 4px; font-family: inherit; }
             .lf-cal-head button:hover { background: #f1f3f5; }
             .lf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
-            .lf-cal-dow div { text-align: center; font-size: 11.5px; font-weight: 700; color: #495057; padding: 4px 0 6px; }
+            .lf-cal-dow div { text-align: center; font-size: 11px; font-weight: 700; color: #495057; padding: 4px 0 6px; }
             .lf-cal-day { display: flex; align-items: center; justify-content: center; height: 32px; font-size: 13px; color: #212529; cursor: pointer; border-radius: 50%; margin: 1px auto; width: 32px; }
             .lf-cal-day:hover { background: #e9ecef; }
             .lf-cal-day.muted { color: #ced4da; }
@@ -2411,7 +2562,7 @@
             .lf-cal-day.sel { background: #1c9dea !important; color: #fff !important; box-shadow: none; }
             .lf-cal-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #f1f3f5; margin-top: 6px; padding-top: 7px; }
             .lf-cal-note { font-size: 11px; color: #868e96; }
-            .lf-dd-rm { background: #dc3545; color: #fff; border: none; border-radius: 4px; padding: 5px 12px; font-size: 11.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+            .lf-dd-rm { background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
             .lf-dd-rm:hover { background: #c82333; }
 
             /* v100.8.76: Tickets Turn-time rule summary (one line per tier) */
@@ -2915,7 +3066,7 @@
                         e.preventDefault(); e.stopPropagation();
                         try {
                             await navigator.clipboard.writeText(dpText);
-                            b.innerHTML = CHECK_SVG; b.style.color = '#28a745';
+                            b.innerHTML = CHECK_SVG; b.style.color = '#16a34a';
                             showToast('Copied: ' + dpText);
                             setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
                         } catch (err) { showToast('Copy failed'); }
@@ -2979,7 +3130,7 @@
                 e.preventDefault(); e.stopPropagation();
                 try {
                     await navigator.clipboard.writeText(addr);
-                    b.innerHTML = CHECK_SVG; b.style.color = '#28a745';
+                    b.innerHTML = CHECK_SVG; b.style.color = '#16a34a';
                     showToast('Copied: ' + addr);
                     setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
                 } catch (err) { showToast('Copy failed'); }
@@ -3143,32 +3294,160 @@
     }
 
     // ==========================================
+    // GLOBAL SEARCH: KEYBOARD PICK (v100.9.42)
+    //
+    // The search is opened with a hotkey, so finishing it with the mouse defeats the
+    // point. The LOAN / LEAD / APPLICATION badge in each result is what opens the
+    // record, so one of them is always marked with a moving RGB glow: arrow keys move
+    // the mark, Enter presses it.
+    //
+    // Enter and the arrows are only taken while the search panel is open and has
+    // results - typing in the box is otherwise untouched.
+    // ==========================================
+    // v100.9.43: @property is what lets the gradient's angle animate. Chrome, Edge and
+    // recent Firefox have it; where it is missing the ring would sit still, so the
+    // angle is driven from a rAF loop instead - and only while something is marked.
+    (function lfGsAngleSupport() {
+        let supported = false;
+        try {
+            if (window.CSS && CSS.registerProperty) {
+                CSS.registerProperty({ name: '--lf-gs-angle', syntax: '<angle>', initialValue: '0deg', inherits: false });
+                supported = true;
+            }
+        } catch (e) { supported = true; }   // already registered by the stylesheet
+        if (supported) return;
+
+        let raf = null;
+        const tick = () => {
+            const el = document.querySelector('.lf-gs-active');
+            if (!el) { raf = null; return; }
+            const deg = (Date.now() / 5) % 360;
+            el.style.setProperty('--lf-gs-angle', deg + 'deg');
+            raf = requestAnimationFrame(tick);
+        };
+        setInterval(() => {
+            if (!raf && document.querySelector('.lf-gs-active')) raf = requestAnimationFrame(tick);
+        }, 400);
+    })();
+
+    const LF_GS_RX = /^(loan|lead|application)$/i;
+    let lfGsIndex = 0;
+
+    function lfGsPanel() {
+        for (const el of document.querySelectorAll('h1,h2,h3,h4,h5,div,span,td,p,strong,b')) {
+            if (!el.offsetParent) continue;
+            if (!/^loans?\s+search$/i.test(lfOwnText(el))) continue;
+            return el.closest('.modal, .ui-dialog, [role="dialog"]') || el.parentElement;
+        }
+        return null;
+    }
+
+    // The innermost element carrying the badge text - never a wrapper around it.
+    function lfGsBadges(panel) {
+        const all = Array.from(panel.querySelectorAll('a, button, span, div, td, strong, b'))
+            .filter(el => el.offsetParent !== null && LF_GS_RX.test(lfOwnText(el)));
+        return all.filter(el => !all.some(o => o !== el && el.contains(o)));
+    }
+
+    // scrollIntoView is disabled globally by this script, so walk up to whatever is
+    // actually scrollable and move it by hand.
+    function lfGsReveal(el) {
+        let sc = el.parentElement;
+        while (sc && sc !== document.body) {
+            const canScroll = sc.scrollHeight > sc.clientHeight + 4 &&
+                              /(auto|scroll)/.test(getComputedStyle(sc).overflowY);
+            if (canScroll) break;
+            sc = sc.parentElement;
+        }
+        const r = el.getBoundingClientRect();
+        if (sc && sc !== document.body) {
+            const sr = sc.getBoundingClientRect();
+            if (r.top < sr.top + 8) sc.scrollTop -= (sr.top + 8 - r.top);
+            else if (r.bottom > sr.bottom - 8) sc.scrollTop += (r.bottom - sr.bottom + 8);
+        } else {
+            if (r.top < 70) window.scrollBy(0, r.top - 80);
+            else if (r.bottom > window.innerHeight - 20) window.scrollBy(0, r.bottom - window.innerHeight + 30);
+        }
+    }
+
+    function lfGsPaint(badges, idx) {
+        badges.forEach((b, i) => b.classList.toggle('lf-gs-active', i === idx));
+        if (badges[idx]) lfGsReveal(badges[idx]);
+    }
+
+    // Keeps the glow on the first result as soon as results appear, and keeps it
+    // pointing at something real when the result list changes under it.
+    function lfGsSync() {
+        const panel = lfGsPanel();
+        if (!panel) {
+            document.querySelectorAll('.lf-gs-active').forEach(e => e.classList.remove('lf-gs-active'));
+            lfGsIndex = 0;
+            return;
+        }
+        const badges = lfGsBadges(panel);
+        if (!badges.length) { lfGsIndex = 0; return; }
+        if (lfGsIndex >= badges.length) lfGsIndex = 0;
+        if (!badges.some(b => b.classList.contains('lf-gs-active'))) lfGsPaint(badges, lfGsIndex);
+    }
+
+    function lfGsKeyHandler(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+
+        const panel = lfGsPanel();
+        if (!panel) return;
+        const badges = lfGsBadges(panel);
+        if (!badges.length) return;
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault(); e.stopPropagation();
+            lfGsIndex = (lfGsIndex + (e.key === 'ArrowDown' ? 1 : -1) + badges.length) % badges.length;
+            lfGsPaint(badges, lfGsIndex);
+            return;
+        }
+
+        // Enter - open whichever badge is marked
+        const target = badges[lfGsIndex] || badges[0];
+        if (!target) return;
+        e.preventDefault(); e.stopPropagation();
+        const clickable = target.closest('a, button, [role="button"]') || target;
+        try { clickable.click(); } catch (err) {}
+        document.querySelectorAll('.lf-gs-active').forEach(el => el.classList.remove('lf-gs-active'));
+        lfGsIndex = 0;
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
+        // v100.9.45: the start and end of the day come from the chosen region rather
+        // than being fixed at 9-18. The logic below is otherwise unchanged.
+        const SH = lfTtShift();
+        const DAY_START = SH.start, DAY_END = SH.end;
+
         let d = new Date(startDate.getTime());
-        if (d.getDay() === 0) { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
-        else if (d.getDay() === 6) { d.setDate(d.getDate() + 2); d.setHours(9, 0, 0, 0); }
-        else if (d.getHours() < 9) { d.setHours(9, 0, 0, 0); }
-        else if (d.getHours() >= 18) {
-            d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+        if (d.getDay() === 0) { d.setDate(d.getDate() + 1); d.setHours(DAY_START, 0, 0, 0); }
+        else if (d.getDay() === 6) { d.setDate(d.getDate() + 2); d.setHours(DAY_START, 0, 0, 0); }
+        else if (d.getHours() < DAY_START) { d.setHours(DAY_START, 0, 0, 0); }
+        else if (d.getHours() >= DAY_END) {
+            d.setDate(d.getDate() + 1); d.setHours(DAY_START, 0, 0, 0);
             if (d.getDay() === 6) { d.setDate(d.getDate() + 2); }
         }
 
         let minutesToAdd = hoursToAdd * 60;
         while (minutesToAdd > 0) {
-            if (d.getDay() === 0) { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); continue; }
-            if (d.getDay() === 6) { d.setDate(d.getDate() + 2); d.setHours(9, 0, 0, 0); continue; }
+            if (d.getDay() === 0) { d.setDate(d.getDate() + 1); d.setHours(DAY_START, 0, 0, 0); continue; }
+            if (d.getDay() === 6) { d.setDate(d.getDate() + 2); d.setHours(DAY_START, 0, 0, 0); continue; }
             let currentHour = d.getHours();
-            if (currentHour < 9) { d.setHours(9, 0, 0, 0); continue; }
-            if (currentHour >= 18) { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); continue; }
-            let endOfDay = new Date(d.getTime()); endOfDay.setHours(18, 0, 0, 0);
+            if (currentHour < DAY_START) { d.setHours(DAY_START, 0, 0, 0); continue; }
+            if (currentHour >= DAY_END) { d.setDate(d.getDate() + 1); d.setHours(DAY_START, 0, 0, 0); continue; }
+            let endOfDay = new Date(d.getTime()); endOfDay.setHours(DAY_END, 0, 0, 0);
             let msUntilEndOfDay = endOfDay.getTime() - d.getTime();
             let minsUntilEndOfDay = msUntilEndOfDay / (60 * 1000);
             if (minutesToAdd <= minsUntilEndOfDay) {
                 d.setMinutes(d.getMinutes() + minutesToAdd); minutesToAdd = 0;
             } else {
-                minutesToAdd -= minsUntilEndOfDay; d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+                minutesToAdd -= minsUntilEndOfDay; d.setDate(d.getDate() + 1); d.setHours(DAY_START, 0, 0, 0);
             }
         }
         return d;
@@ -3241,7 +3520,7 @@
         if (document.getElementById('lf-confirm-dialog')) return;
         const dialogHtml = `
             <div id="lf-confirm-dialog" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 99999; display: flex; align-items: center; justify-content: center;">
-                <div style="background: white; padding: 25px; border-radius: 8px; width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: sans-serif; text-align: center;">
+                <div style="background: white; padding: 25px; border-radius: 10px; width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: sans-serif; text-align: center;">
                     <h4 style="margin-top: 0; color: #333; font-weight: bold; margin-bottom: 12px;">Discard Unsaved Note?</h4>
                     <p style="color: #666; font-size: 14px; margin: 15px 0 25px 0;">You have typed a note. If you close this window, your note will be permanently lost.</p>
                     <div style="display: flex; justify-content: space-around;">
@@ -3322,7 +3601,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.40</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.45</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -3405,6 +3684,10 @@
                                 <div class="lf-hours-label">Role</div>
                                 <select id="lf-tt-role" class="lf-dt-select" style="width: 100%;">
                                     ${Object.keys(LF_TT_RULES).map(k => `<option value="${k}"${ttRole === k ? ' selected' : ''}>${LF_TT_RULES[k].label}</option>`).join('')}
+                                </select>
+                                <div class="lf-hours-label" style="margin-top: 4px;">Working hours</div>
+                                <select id="lf-tt-shift" class="lf-dt-select" style="width: 100%;">
+                                    ${Object.keys(LF_TT_SHIFTS).map(k => `<option value="${k}"${lfTtShiftKey() === k ? ' selected' : ''}>${LF_TT_SHIFTS[k].label} \u2013 ${LF_TT_SHIFTS[k].note}</option>`).join('')}
                                 </select>
                                 <div class="lf-hours-label" style="margin-top: 4px;">Rule</div>
                                 <div id="lf-tt-summary" class="lf-tt-summary">${LF_TT_RULES[ttRole].summary}</div>
@@ -3688,11 +3971,16 @@
         const ttContainer = document.getElementById('lf-tt-container');
         const ttRoleSel = document.getElementById('lf-tt-role');
         const ttSummary = document.getElementById('lf-tt-summary');
+        const ttShiftSel = document.getElementById('lf-tt-shift');
         const ttRefresh = () => {
             const r = LF_TT_RULES[lfTtRole()];
             if (ttSummary) {
                 ttSummary.innerHTML = r ? r.summary : 'TBD';
                 ttSummary.classList.toggle('tbd', !r || r.ready !== true);
+                // v100.9.45: fill in the "Counted ..." line from the chosen region
+                ttSummary.querySelectorAll('.lf-tt-counted').forEach(el => {
+                    el.textContent = lfTtCountedNote();
+                });
             }
             // Recompute from scratch so a rule change takes effect immediately
             lfTtClear();
@@ -3703,6 +3991,13 @@
                 if (e.target.checked) { ttContainer.classList.remove('hidden'); ttContainer.classList.add('visible'); }
                 else { ttContainer.classList.remove('visible'); ttContainer.classList.add('hidden'); }
                 ttRefresh();
+            });
+        }
+        if (ttShiftSel) {
+            ttShiftSel.addEventListener('change', (e) => {
+                localStorage.setItem(LF_TT_SHIFT_KEY, e.target.value);
+                ttRefresh();                                  // redraws every due date
+                showToast('Working hours: ' + lfTtShift().label + ' (' + lfTtShift().note + ')');
             });
         }
         if (ttRoleSel) {
@@ -3941,7 +4236,7 @@
             const textSpan = saveBtn.querySelector('span');
             const originalText = textSpan.innerText;
             textSpan.innerText = 'Saved!';
-            saveBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
+            saveBtn.style.background = 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)';
             saveBtn.style.boxShadow = '0 2px 4px rgba(40, 167, 69, 0.4)';
             setTimeout(() => {
                 textSpan.innerText = originalText;
@@ -4193,7 +4488,7 @@
                             if (m) {
                                 const d = new Date(parseInt(m[3]), parseInt(m[1]) - 1, parseInt(m[2]));
                                 d.setHours(0, 0, 0, 0);
-                                if (d < now) { tds[dueIdx].style.color = '#e74c3c'; tds[dueIdx].style.fontWeight = 'bold'; tds[dueIdx].title = 'Overdue!'; }
+                                if (d < now) { tds[dueIdx].style.color = '#dc2626'; tds[dueIdx].style.fontWeight = 'bold'; tds[dueIdx].title = 'Overdue!'; }
                                 else if (d.getTime() === now.getTime()) { tds[dueIdx].style.color = '#e67e22'; tds[dueIdx].style.fontWeight = 'bold'; tds[dueIdx].title = 'Due Today!'; }
                             }
                         }
@@ -4365,7 +4660,7 @@
                                     // the disclose due, so it is obvious the override applied
                                     const ddDriven = !!(ddCapNow && parseInt(row.dataset.dueDate) === ddCapNow.getTime());
                                     const dueMark = ddDriven ? ' <span style="font-size:10px; font-weight:800; color:#d6336c;">(disclose due)</span>' : '';
-                                    const html = `${assignedLine}<div style="color:#e67e22; font-weight:bold; font-size:14px; margin-bottom:3px;">Due: ${row.dataset.dueDateFormatted}${dueMark}</div><span style="display:inline-block; padding:2px 10px; border-radius:12px; background:${pillBg}; color:#ffffff; font-weight:700; font-size:12.5px; white-space:nowrap;">${tText}</span>`;
+                                    const html = `${assignedLine}<div style="color:#e67e22; font-weight:bold; font-size:14px; margin-bottom:3px;">Due: ${row.dataset.dueDateFormatted}${dueMark}</div><span style="display:inline-block; padding:2px 10px; border-radius:10px; background:${pillBg}; color:#ffffff; font-weight:700; font-size:12px; white-space:nowrap;">${tText}</span>`;
                                     if (bc.innerHTML !== html) bc.innerHTML = html;
                                 } else if (fromAssign) {
                                     // v100.8.77: no assign time cached for this ticket yet.
@@ -4380,7 +4675,7 @@
                                         pill.className = 'lf-ds-start-btn';
                                         pill.textContent = '\u23F1 open Audit log to start';
                                         pill.title = 'Click: opens Action \u2192 Audit log, saves the assign time and closes it again';
-                                        pill.style.cssText = 'display:inline-block; padding:3px 10px; border-radius:12px; background:#e2e8f0; color:#475569; font-weight:700; font-size:11.5px; white-space:nowrap; cursor:pointer;';
+                                        pill.style.cssText = 'display:inline-block; padding:3px 10px; border-radius:10px; background:#e2e8f0; color:#475569; font-weight:700; font-size:11px; white-space:nowrap; cursor:pointer;';
                                         pill.onmouseenter = () => { pill.style.background = '#cbd5e1'; };
                                         pill.onmouseleave = () => { pill.style.background = '#e2e8f0'; };
                                         pill.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); lfDsAutoOpenAudit(row); };
@@ -4465,6 +4760,7 @@
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
             try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
             try { lfSizeTodoDropZones(); } catch (err) {}            // v100.9.38
+            try { lfGsSync(); } catch (err) {}                       // v100.9.42
 
             // 1.0 Escalation desk copy buttons: borrower name + loan number (v100.8.85)
             try { lfEscInjectCopyButtons(); } catch (err) {}
@@ -4593,7 +4889,7 @@
             const avatar = document.querySelector('.navbar-user img, #a__user img, .symbol img, img.rounded-circle');
             if (avatar) {
                 avatar.style.borderRadius = '50%';
-                avatar.style.boxShadow = isCurrentlyOn ? '0 0 0 3px #2ecc71, 0 0 12px rgba(46, 204, 113, 0.6)' : '0 0 0 3px #e74c3c, 0 0 12px rgba(231, 76, 60, 0.6)';
+                avatar.style.boxShadow = isCurrentlyOn ? '0 0 0 3px #2ecc71, 0 0 12px rgba(46, 204, 113, 0.6)' : '0 0 0 3px #dc2626, 0 0 12px rgba(231, 76, 60, 0.6)';
             }
 
             // 2. NOW CHECK IF AUTO-TOGGLE IS ENABLED
@@ -4881,6 +5177,9 @@
         }, true);
 
         document.addEventListener('mousedown', function(e) { mousedownTarget = e.target; }, true);
+
+        // v100.9.42: arrow keys / Enter pick a global-search result
+        document.addEventListener('keydown', lfGsKeyHandler, true);
 
         // v100.9.19: catch the WARNING NOTICE as early as possible on a refresh, so it
         // does not flash up before the master loop's first pass.
@@ -5260,7 +5559,7 @@
         st.id = 'lf-ar-styles';
         st.innerHTML = `
             #lf-ar-popup { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 99998; display: flex; align-items: center; justify-content: center; }
-            .lf-ar-box { background: #fff; border-radius: 8px; width: 460px; max-width: calc(100vw - 40px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: inherit; padding: 22px; }
+            .lf-ar-box { background: #fff; border-radius: 10px; width: 460px; max-width: calc(100vw - 40px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: inherit; padding: 22px; }
             .lf-ar-box h4 { margin: 0 0 4px; font-weight: bold; color: #333; font-size: 17px; }
             .lf-ar-sub { color: #888; font-size: 12px; margin-bottom: 14px; }
             .lf-ar-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 4px; }
@@ -5273,19 +5572,19 @@
             .lf-ar-day.on { background: #f36f20; border-color: #f36f20; color: #fff; }
             .lf-ar-actions { display: flex; justify-content: space-between; margin-top: 20px; }
             .lf-ar-actions button { border: none; border-radius: 4px; padding: 10px 24px; font-weight: bold; font-size: 14px; cursor: pointer; font-family: inherit; }
-            #lf-ar-save { background: #28a745; color: #fff; }
-            #lf-ar-save:hover { background: #218838; }
-            #lf-ar-remove { background: #dc3545; color: #fff; }
+            #lf-ar-save { background: #16a34a; color: #fff; }
+            #lf-ar-save:hover { background: #15803d; }
+            #lf-ar-remove { background: #dc2626; color: #fff; }
             #lf-ar-remove:hover { background: #c82333; }
             .lf-ar-close { float: right; background: none; border: none; font-size: 24px; line-height: 1; color: #aaa; cursor: pointer; padding: 0; margin: -4px -4px 0 0; }
             .lf-ar-close:hover { color: #333; }
             .lf-ar-indicator { display: table; margin-top: 4px; padding: 2px 8px; border-radius: 10px; background: rgba(243,111,32,0.13); border: 1px solid #f36f20; color: #c2591a; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
             .lf-ar-indicator.lf-ar-due { background: #f36f20; border-color: #f36f20; color: #ffffff; }
-            .lf-ar-indicator.lf-ar-sent { background: rgba(40,167,69,0.12); border-color: #28a745; color: #1e7e34; }
+            .lf-ar-indicator.lf-ar-sent { background: rgba(40,167,69,0.12); border-color: #16a34a; color: #1e7e34; }
             @keyframes lfArPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(243,111,32,0.55); } 50% { box-shadow: 0 0 0 6px rgba(243,111,32,0); } }
             .lf-ar-indicator.lf-ar-soon { animation: lfArPulse 1.6s ease-in-out infinite; }
             /* v100.8.46: agenda strip above the pipeline */
-            #lf-ar-agenda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px 0; padding: 8px 12px; background: #fff7f2; border: 1px solid #f3ceb6; border-left: 4px solid #f36f20; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #7c4a26; }
+            #lf-ar-agenda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px 0; padding: 8px 12px; background: #fff7f2; border: 1px solid #f3ceb6; border-left: 4px solid #f36f20; border-radius: 10px; font-size: 12px; font-weight: 600; color: #7c4a26; }
             #lf-ar-agenda .lf-ar-agenda-ico { font-size: 14px; }
             #lf-ar-agenda .lf-ar-agenda-count { color: #c2591a; font-weight: 800; }
             #lf-ar-agenda .lf-ar-agenda-item { cursor: pointer; color: #b45309; text-decoration: underline; text-decoration-style: dotted; white-space: nowrap; }
