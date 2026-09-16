@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture) Update Sept 16th, 2026
+// @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.45
-// @description  Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.46
+// @description  Update Sept 16th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -13,10 +13,19 @@
 // @homepageURL  https://github.com/Hieukhongbietcode/LF-optimizer
 // ==/UserScript==
 
+// RELEASE CHECKLIST - two things on every release:
+//   1. bump @version                  (Tampermonkey only offers an update if this rises)
+//   2. set the date in @description   (format: "Update Mon DDth, YYYY - ...")
+//
+// @name must NEVER change. Tampermonkey identifies a script by @name + @namespace, so
+// a new name reads as a different script: the raw link then offers "Install" instead of
+// "Update", and the user ends up running two copies at once. The release date lives in
+// @description for exactly that reason.
+
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.45 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.46 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3601,7 +3610,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.45</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.46</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
