@@ -1,11 +1,11 @@
 # Loan Factory Optimizer
 
-![Version](https://img.shields.io/badge/version-100.9.40-blue)
+![Version](https://img.shields.io/badge/version-100.9.45-blue)
 ![Userscript](https://img.shields.io/badge/type-userscript-orange)
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
 
-A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, drag-and-drop uploads, one-click copying, and editor conveniences.
+A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, drag-and-drop uploads, keyboard search, and editor conveniences.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
 
@@ -114,7 +114,7 @@ Open Loan Factory and go to your pipeline. You should see:
 To confirm precisely, press **F12** to open the browser console. You should see:
 
 ```
-[LF Optimizer] v100.9.40 loaded
+[LF Optimizer] v100.9.45 loaded
 ```
 
 <img width="995" height="386" alt="image" src="https://github.com/user-attachments/assets/c4f127d9-1741-45bb-bc57-e3f450e3ac8d" />
@@ -143,6 +143,15 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 
 <img width="338" height="940" alt="image" src="https://github.com/user-attachments/assets/6df15e74-6289-4e96-b358-727a2a48de54" />
 
+
+### Global search
+
+| Feature | What it does |
+|---|---|
+| **Search hotkey** | One keystroke (`\` by default) focuses the search box from anywhere |
+| **Keyboard results** | The first **LOAN / LEAD / APPLICATION** badge is marked with a neon ring that runs clockwise around it. **↑ / ↓** move the mark, **Enter** opens it |
+
+The search is opened from the keyboard, so it can be finished from the keyboard — no reaching for the mouse to click the badge. The marked result scrolls into view as you move down a long list.
 
 ### Pipeline
 
@@ -196,6 +205,7 @@ Property value is used as the basis only when no appraised value has been entere
 | Feature | What it does |
 |---|---|
 | **Turn-time SLA** | Calculates a due date and shows a live countdown |
+| **Working hours** | Choose the shift the clock runs on, so the SLA matches where you actually work |
 | **Disclose-due dates** | Set a due date per ticket from a calendar; overrides the SLA at 6:00 PM that day *(Disclosure Specialist only)* |
 | **Resubmit label** | Marks tickets that are re-disclosures |
 | **Assign-time capture** | Reads assignment times from the audit log, with a bulk update button |
@@ -208,7 +218,20 @@ Property value is used as the basis only when no appraised value has been entere
 | Underwriter | 8 hours | 5 hours | 3 hours | — |
 | Disclosure Specialist | 4 hours | 4 hours | 4 hours | **6 hours** |
 
-Counted in business hours only — Monday to Friday, 9:00 to 18:00. The Underwriter clock starts at the created time; the Disclosure Specialist clock starts at the assign time.
+The Underwriter clock starts at the created time; the Disclosure Specialist clock starts at the assign time.
+
+**Working hours**
+
+Everything is stated in Pacific, because that is the clock the portal's own timestamps use. Pick the row that matches your working day:
+
+| Option | Hours counted |
+|---|---|
+| East Coast | 6:00 AM – 3:00 PM PST |
+| Central | 7:00 AM – 4:00 PM PST |
+| Mountain | 8:00 AM – 5:00 PM PST |
+| **West Coast** *(default)* | 9:00 AM – 6:00 PM PST |
+
+Only Monday to Friday counts, and only hours inside the chosen window. Changing the setting recalculates every due date on the page immediately, and the "Counted…" line under the rules updates to match.
 
 ### Editing
 
@@ -225,7 +248,6 @@ Counted in business hours only — Monday to Friday, 9:00 to 18:00. The Underwri
 
 | Feature | What it does |
 |---|---|
-| **Global search hotkey** | One keystroke focuses the search box from anywhere |
 | **Auto-availability** | Schedules your availability status |
 | **Auto-navigate to Docs** | Jumps straight to the Docs tab when opening a loan |
 | **Auto-collapse sidebar** | Reclaims screen width automatically |
@@ -277,6 +299,10 @@ Then open your extensions page and check the ID shown there. **If the two IDs di
 
 If this keeps happening after restarts, switch to Firefox. It's a Manifest V3 limitation in Chrome and Edge that affects large scripts.
 
+### Due dates look wrong
+
+Check **Working hours** in the Tickets Turn-time card. A ticket assigned late in your day rolls over to the next morning, so a 4-hour SLA can legitimately land tomorrow. The "Counted…" line under the rules tells you exactly which window is being used.
+
 ### Drag & drop upload isn't working
 
 - Drop the file **onto the dashed box**, not onto the Upload button
@@ -318,6 +344,9 @@ Chrome and Edge reset the "Allow User Scripts" permission when they update. Turn
 
 **Why is the LTV different from the portal's own LTV field?**
 This one is calculated against the appraised value, so it stays correct even when the portal's field is stale or empty.
+
+**Why are the working hours written in Pacific time?**
+The portal's timestamps are already on Pacific, so stating the window in the same clock avoids converting twice. Picking "East Coast" gives 6 AM – 3 PM Pacific, which is a normal 9-to-5 on the east coast.
 
 **Is the drag & drop upload doing anything unusual to my files?**
 No. The file is placed into the portal's own upload field and the portal handles it from there — exactly as if you had picked it with the file dialog.
