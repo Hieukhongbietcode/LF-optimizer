@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.46
-// @description  Update Sept 16th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.50
+// @description  Update Sept 17th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.46 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.50 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -846,6 +846,19 @@
                     const txtF = recF ? `Due: ${lfPad2(recF.m)}/${lfPad2(recF.d)}` : 'Due: --/--';
                     if (ddFast.textContent !== txtF) ddFast.textContent = txtF;
                 }
+                // v100.9.50: a Bypass button can render after the box was placed - move
+                // the box back under whichever control is now last.
+                try {
+                    document.querySelectorAll('td .lf-drop-box').forEach(box => {
+                        const cell = box.closest('td');
+                        if (!cell) return;
+                        const last = lfTodoLastControl(cell);
+                        if (last && box.previousElementSibling !== last) {
+                            last.parentNode.insertBefore(box, last.nextSibling);
+                        }
+                    });
+                } catch (err) {}
+
                 // v100.9.11: keep the chip row sitting directly above "+Labels"
                 const cr = row.querySelector('.lf-chip-row');
                 if (cr) {
@@ -2445,6 +2458,18 @@
                 z-index: -2;
             }
 
+            /* v100.9.47: mortgage insurance, highlighted so it stands out from LTV */
+            .lf-mi-appended {
+                margin-left: 8px;
+                padding: 1px 6px;
+                border-radius: 4px;
+                background: #fff3bf;
+                color: #663c00;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            .lf-mi-appended .lf-icon-btn { color: #663c00; }
+
             /* v100.9.41: repeat counter on a coalesced toast */
             .lf-toast2-count {
                 margin-left: 8px; padding: 1px 7px;
@@ -3030,6 +3055,107 @@
         return wrap;
     }
 
+    // ==========================================
+    // MORTGAGE INSURANCE (v100.9.47)
+    //
+    // FHA figures come straight from HUD Mortgagee Letter 2023-05, as published on
+    // FHA.com. Checked against the worked example in the JVM article: a $386,000 base
+    // loan at 96.5% LTV over 30 years gives 55 bps, $2,123 a year, $177 a month.
+    //
+    // Conventional PMI is different in kind - the rate depends on credit score, LTV,
+    // property type and term, and every MI company publishes its own grid. The source
+    // provided only gives a range ("0.2% - 2%, varies by credit/LTV"), so the tiers
+    // below are a starting point, not a quote. They live in one place on purpose:
+    // change LF_PMI_TIERS and every figure follows.
+    // ==========================================
+    const LF_FHA_THRESHOLD = 726200;
+
+    // annual rate in basis points
+    function lfFhaMipBps(baseLoan, ltv, termYears) {
+        const big = baseLoan > LF_FHA_THRESHOLD;
+        if (termYears > 15) {
+            if (!big) return ltv <= 90 ? 50 : (ltv <= 95 ? 50 : 55);
+            return ltv <= 90 ? 70 : (ltv <= 95 ? 70 : 75);
+        }
+        // 15 years or less
+        if (!big) return ltv <= 90 ? 15 : 40;
+        return ltv <= 78 ? 15 : (ltv <= 90 ? 40 : 65);
+    }
+
+    // ---- Fannie Mae, Selling Guide B7-1-02: MI COVERAGE required on a conventional
+    // loan above 80% LTV. This is the share of the loan that must be insured - it is
+    // not a price. Fannie Mae does not set premiums; the MI companies do, from their
+    // own rate cards. Coverage is shown so the requirement is visible and correct.
+    function lfFnmaMiCoverage(ltv, termYears, isArm) {
+        const shortTerm = !isArm && termYears <= 20;   // ARMs always use the longer-term column
+        if (ltv <= 85) return shortTerm ? 6  : 12;
+        if (ltv <= 90) return shortTerm ? 12 : 25;
+        if (ltv <= 95) return shortTerm ? 25 : 30;
+        return 35;                                     // 95.01 - 97%
+    }
+
+    // ---- The PREMIUM. These are the rates the dollar figure is built from, and they
+    // are the one thing here that does not come from a published rule - a real quote
+    // depends on the borrower's credit score and the MI company's card. Replace this
+    // table with your own and every figure follows.
+    const LF_PMI_TIERS = [
+        { upTo: 85,       pct: 0.32 },
+        { upTo: 90,       pct: 0.52 },
+        { upTo: 95,       pct: 0.78 },
+        { upTo: Infinity, pct: 0.98 }
+    ];
+    function lfConvPmiPct(ltv) {
+        for (const t of LF_PMI_TIERS) if (ltv <= t.upTo) return t.pct;
+        return LF_PMI_TIERS[LF_PMI_TIERS.length - 1].pct;
+    }
+
+    // Loan type / term as written in the summary
+    function lfSummaryLoanType(scope) {
+        const c = lfSummaryValueCell(scope, /^loan type$/);
+        return c ? (c.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    }
+    function lfSummaryLoanProgram(scope) {
+        for (const rx of [/^loan program$/, /^amortization type$/, /^rate type$/, /^product$/]) {
+            const c = lfSummaryValueCell(scope, rx);
+            if (c) return (c.textContent || '').replace(/\s+/g, ' ').trim();
+        }
+        return '';
+    }
+
+    function lfSummaryTermYears(scope) {
+        for (const rx of [/^loan term$/, /^term$/, /^amortization$/, /^amortization type$/]) {
+            const c = lfSummaryValueCell(scope, rx);
+            if (!c) continue;
+            const m = (c.textContent || '').match(/(\d{1,2})\s*(?:-|\s)?\s*(?:yr|year)/i);
+            if (m) return parseInt(m[1], 10);
+        }
+        return 30;   // 30-year is the default when the summary does not state a term
+    }
+
+    // Returns { monthly, label } or null when no MI applies.
+    function lfComputeMi(scope, baseLoan, ltv) {
+        if (!isFinite(baseLoan) || baseLoan <= 0 || !isFinite(ltv) || ltv <= 0) return null;
+        const type = lfSummaryLoanType(scope).toLowerCase();
+        const term = lfSummaryTermYears(scope);
+
+        if (/\bfha\b/.test(type)) {
+            const bps = lfFhaMipBps(baseLoan, ltv, term);
+            return { monthly: baseLoan * (bps / 10000) / 12, label: (bps / 100).toFixed(2).replace(/0$/, '') + '%' };
+        }
+        if (/conventional/.test(type)) {
+            if (ltv <= 80) return null;               // Fannie Mae requires MI only above 80% LTV
+            const pct = lfConvPmiPct(ltv);
+            const isArm = /\barm\b|adjustable/i.test(lfSummaryLoanProgram(scope) + ' ' + type);
+            const cov = lfFnmaMiCoverage(ltv, term, isArm);
+            return {
+                monthly: baseLoan * (pct / 100) / 12,
+                label: pct + '%',
+                coverage: cov
+            };
+        }
+        return null;                                   // VA, USDA, Non-QM, Jumbo - nothing shown
+    }
+
     function lfApplyLtvAndDownpayment(scope) {
         const totalCell = lfSummaryValueCell(scope, /^total loan amount$/);
         const loanCell  = lfSummaryValueCell(scope, /^loan amount$/);
@@ -3085,9 +3211,9 @@
             }
         }
 
-        // ---- Loan amount: LTV only, no downpayment ----
+        // ---- Loan amount: LTV, then MI where it applies ----
         if (loanCell) {
-            const amt = lfParseMoney(loanCell.cloneNode(true).textContent.replace(/ - LTV:.*$/i, ''));
+            const amt = lfParseMoney(loanCell.cloneNode(true).textContent.replace(/ - LTV:.*$/i, '').replace(/MI:.*$/i, ''));
             if (isFinite(amt) && amt > 0) {
                 const pct = (amt / basis) * 100;
                 let span = loanCell.querySelector('.lf-ltv2-appended');
@@ -3095,6 +3221,41 @@
                 else {
                     const num = span.querySelector('.lf-ltv-num');
                     if (num) { num.textContent = lfFmtPct(pct); num.style.color = lfLtvColor(pct); num.style.fontWeight = '700'; }
+                }
+
+                // v100.9.47: FHA always carries MIP; conventional only above 80% LTV.
+                const mi = lfComputeMi(scope, amt, pct);
+                let miEl = loanCell.querySelector('.lf-mi-appended');
+                if (!mi) {
+                    if (miEl) miEl.remove();          // no MI applies - the copy button goes too
+                } else {
+                    if (!miEl) {
+                        miEl = document.createElement('span');
+                        miEl.className = 'lf-mi-appended';
+                        loanCell.appendChild(miEl);
+                    }
+                    const miText = lfFmtMoney(mi.monthly) + '/mo';
+                    if (miEl.dataset.lfVal !== miText) {
+                        miEl.dataset.lfVal = miText;
+                        miEl.textContent = 'MI: ' + miText;
+                        miEl.title = 'Mortgage insurance at ' + mi.label + ' a year on ' + lfFmtMoney(amt)
+                            + (mi.coverage ? '\nFannie Mae required coverage: ' + mi.coverage + '% (Selling Guide B7-1-02)' : '');
+                        const b = document.createElement('button');
+                        b.className = 'lf-icon-btn lf-mi-copy';
+                        b.type = 'button';
+                        b.title = 'Copy the mortgage insurance';
+                        b.innerHTML = COPY_SVG;
+                        b.onclick = async (e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            try {
+                                await navigator.clipboard.writeText(miText);
+                                b.innerHTML = CHECK_SVG; b.style.color = '#16a34a';
+                                showToast('Copied: ' + miText);
+                                setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
+                            } catch (err) { showToast('Copy failed'); }
+                        };
+                        miEl.appendChild(b);
+                    }
                 }
             }
         }
@@ -3240,11 +3401,20 @@
     // row and set a height - but the box lives inside that row, so every pass made the
     // row taller and the box grew without end. All that is set here is where the box
     // starts, just under the Upload button.
+    // v100.9.50: some rows carry a Bypass button under Upload. The drop box has to sit
+    // below whichever control comes last, or it lands between the two and covers one
+    // of them. This returns that last control rather than assuming it is Upload.
+    function lfTodoLastControl(cell) {
+        const ctrls = Array.from(cell.querySelectorAll('button, a, .btn'))
+            .filter(el => !el.classList.contains('lf-drop-box') && !el.closest('.lf-drop-box'));
+        return ctrls.length ? ctrls[ctrls.length - 1] : null;
+    }
+
     function lfSizeTodoDropZones() {
         document.querySelectorAll('.lf-drop-box').forEach(box => {
             const cell = box.closest('td');
             if (!cell) return;
-            const trigger = cell.querySelector('button, a, .btn');
+            const trigger = lfTodoLastControl(cell);
             const top = trigger ? (trigger.offsetTop + trigger.offsetHeight + 6) : 6;
             const want = top + 'px';
             if (box.style.top !== want) box.style.top = want;
@@ -3297,7 +3467,8 @@
                     try { trigger.click(); } catch (err) {}
                 });
 
-                trigger.parentNode.insertBefore(box, trigger.nextSibling);
+                const last = lfTodoLastControl(cell) || trigger;
+                last.parentNode.insertBefore(box, last.nextSibling);
             });
         });
     }
@@ -3401,10 +3572,25 @@
 
     function lfGsKeyHandler(e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) return;
 
         const panel = lfGsPanel();
         if (!panel) return;
+
+        // v100.9.49: Esc closes the results, using the panel's own close control so the
+        // app tears the dialog down the way it expects. Left alone when one of this
+        // script's own dialogs is on top - that one owns the key while it is open.
+        if (e.key === 'Escape') {
+            if (document.getElementById('lf-confirm-dialog') || document.querySelector('.tera-confirm')) return;
+            const closeEl = lfFindCloseControl(panel);
+            if (!closeEl) return;
+            e.preventDefault(); e.stopPropagation();
+            document.querySelectorAll('.lf-gs-active').forEach(el => el.classList.remove('lf-gs-active'));
+            lfGsIndex = 0;
+            try { closeEl.click(); } catch (err) {}
+            return;
+        }
+
         const badges = lfGsBadges(panel);
         if (!badges.length) return;
 
@@ -3610,7 +3796,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.46</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.50</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
