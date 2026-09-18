@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.50
+// @version      100.9.51
 // @description  Update Sept 17th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.50 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.51 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3180,7 +3180,17 @@
                     if (num) { num.textContent = lfFmtPct(pct); num.style.color = lfLtvColor(pct); num.style.fontWeight = '700'; }
                 }
 
-                const down = basis - total;
+                // v100.9.51: downpayment is the lesser of property value and appraised
+                // value, minus the BASE loan amount - not the total, which already has
+                // the financed premium rolled into it.
+                const apprVal = apprCell ? lfParseMoney(apprCell.textContent) : NaN;
+                const propVal = propCell ? lfParseMoney(propCell.textContent) : NaN;
+                const vals = [apprVal, propVal].filter(v => isFinite(v) && v > 0);
+                const dpBasis = vals.length ? Math.min.apply(null, vals) : basis;
+                const baseLoan = loanCell
+                    ? lfParseMoney(loanCell.cloneNode(true).textContent.replace(/ - LTV:.*$/i, '').replace(/MI:.*$/i, ''))
+                    : NaN;
+                const down = dpBasis - ((isFinite(baseLoan) && baseLoan > 0) ? baseLoan : total);
                 let dp = totalCell.querySelector('.lf-dp-appended');
                 if (!dp) {
                     dp = document.createElement('span');
@@ -3796,7 +3806,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.50</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.51</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
