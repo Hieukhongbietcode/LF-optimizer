@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.59
+// @version      100.9.63
 // @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.59 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.63 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -2460,90 +2460,175 @@
                 z-index: -2;
             }
 
-            /* v100.9.52: to-do email templates */
+            /* v100.9.63: the template editor, restyled.
+               System typography, hairline separators, generous spacing and a single
+               accent colour - the chrome recedes so the email being written is the
+               only thing with weight on screen. */
             .lf-et-modal {
                 position: fixed; inset: 0; z-index: 2147483600;
-                background: rgba(15, 23, 42, .5);
+                background: rgba(0, 0, 0, .28);
+                -webkit-backdrop-filter: saturate(180%) blur(20px);
+                backdrop-filter: saturate(180%) blur(20px);
                 display: flex; align-items: center; justify-content: center;
-                font-family: inherit;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
+                animation: lfEtFade .18s ease;
             }
+            @keyframes lfEtFade { from { opacity: 0 } to { opacity: 1 } }
+            @keyframes lfEtRise { from { opacity: 0; transform: translateY(12px) scale(.985) } to { opacity: 1; transform: none } }
+
             .lf-et-box {
-                background: #fff; border-radius: 10px; width: 660px; max-width: 94vw;
-                max-height: 86vh; display: flex; flex-direction: column;
-                box-shadow: 0 24px 60px rgba(0,0,0,.34);
+                background: #fff; border-radius: 18px;
+                width: 720px; max-width: 94vw; max-height: 88vh;
+                display: flex; flex-direction: column;
+                box-shadow: 0 32px 64px rgba(0,0,0,.24), 0 0 0 .5px rgba(0,0,0,.06);
+                overflow: hidden;
+                animation: lfEtRise .22s cubic-bezier(.32,.72,0,1);
             }
+
             .lf-et-head {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
+                display: flex; align-items: center; gap: 12px;
+                padding: 18px 22px 14px;
             }
-            .lf-et-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: #1e293b; }
+            .lf-et-head h4 {
+                margin: 0; font-size: 17px; font-weight: 600;
+                letter-spacing: -.02em; color: #1d1d1f;
+            }
             .lf-et-reset {
-                margin-left: 12px; padding: 4px 12px;
-                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
-                font: 700 11px inherit; color: #475569; cursor: pointer;
+                margin: 0; padding: 5px 12px;
+                background: rgba(0,0,0,.05); border: none; border-radius: 980px;
+                font: 500 12px/1 inherit; color: #1d1d1f; cursor: pointer;
+                transition: background .15s ease;
             }
-            .lf-et-reset:hover { border-color: #dc2626; color: #dc2626; }
+            .lf-et-reset:hover { background: rgba(0,0,0,.09); }
+            .lf-et-x {
+                width: 28px; height: 28px; padding: 0;
+                background: rgba(0,0,0,.05); border: none; border-radius: 50%;
+                font-size: 17px; line-height: 1; color: #6e6e73; cursor: pointer;
+                transition: background .15s ease, color .15s ease;
+            }
+            .lf-et-x:hover { background: rgba(0,0,0,.09); color: #1d1d1f; }
+
+            .lf-et-note {
+                padding: 0 22px 16px;
+                font-size: 12px; line-height: 1.5; color: #6e6e73;
+                letter-spacing: -.01em;
+            }
+
             .lf-et-title-row {
-                display: flex; align-items: center; gap: 10px;
-                margin: 12px 18px 0;
+                display: flex; align-items: center; gap: 12px;
+                margin: 0 22px 14px; padding: 0;
             }
             .lf-et-title-row label {
-                font-size: 11px; font-weight: 800; color: #64748b;
-                text-transform: uppercase; letter-spacing: .4px; flex: none;
+                flex: none; font-size: 11px; font-weight: 600; color: #86868b;
+                text-transform: uppercase; letter-spacing: .06em;
             }
             .lf-et-title {
-                flex: 1; height: 30px; padding: 0 10px;
-                border: 1px solid #cbd5e1; border-radius: 6px;
-                font-size: 12px; color: #1e293b; font-family: inherit; background: #fff;
+                flex: 1; height: 36px; padding: 0 13px;
+                border: none; border-radius: 10px;
+                background: rgba(0,0,0,.04);
+                font-size: 13px; color: #1d1d1f; font-family: inherit;
+                letter-spacing: -.01em;
+                transition: background .15s ease, box-shadow .15s ease;
             }
-            .lf-et-title:focus { border-color: #7c3aed; outline: none; }
-            .lf-et-x { background: none; border: none; font-size: 22px; line-height: 1; color: #94a3b8; cursor: pointer; }
-            .lf-et-note { padding: 10px 18px 0; font-size: 11px; color: #64748b; line-height: 1.55; }
+            .lf-et-title:focus {
+                outline: none; background: #fff;
+                box-shadow: 0 0 0 3.5px rgba(0,122,255,.25), inset 0 0 0 1px rgba(0,122,255,.6);
+            }
+
             .lf-et-tools {
-                display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
-                margin: 10px 18px 0; padding: 6px 8px;
-                background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px 6px 0 0;
-                border-bottom: none;
+                display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+                margin: 0 22px; padding: 6px;
+                background: rgba(0,0,0,.04); border: none; border-radius: 12px;
             }
             .lf-et-tool {
-                min-width: 28px; height: 26px; padding: 0 6px;
-                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
-                font: 600 12px/1 inherit; color: #334155; cursor: pointer;
+                display: inline-flex; align-items: center; justify-content: center;
+                min-width: 30px; height: 28px; padding: 0 7px;
+                background: transparent; border: none; border-radius: 8px;
+                font: 500 13px/1 inherit; color: #1d1d1f; cursor: pointer;
+                transition: background .12s ease, color .12s ease;
             }
-            .lf-et-tool:hover { background: #ede9fe; border-color: #7c3aed; color: #6d28d9; }
-            .lf-et-tool.on { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-            .lf-et-sep { width: 1px; height: 18px; background: #cbd5e1; margin: 0 3px; }
-            .lf-et-size { height: 26px; min-width: 52px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; color: #334155; background: #fff; }
+            .lf-et-tool:hover { background: rgba(0,0,0,.06); }
+            .lf-et-tool.on { background: #fff; color: #007aff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+            .lf-et-sep { width: 1px; height: 18px; background: rgba(0,0,0,.1); margin: 0 5px; }
+
+            .lf-et-size {
+                height: 28px; min-width: 58px; padding: 0 6px;
+                border: none; border-radius: 8px;
+                background: transparent; color: #1d1d1f;
+                font: 500 12px inherit; cursor: pointer;
+                transition: background .12s ease;
+            }
+            .lf-et-size:hover { background: rgba(0,0,0,.06); }
+            .lf-et-size:focus { outline: none; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
             .lf-et-swatch {
                 display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-                width: 30px; height: 26px; padding: 2px 0; gap: 1px;
-                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;
+                width: 32px; height: 28px; padding: 3px 0; gap: 2px;
+                background: transparent; border: none; border-radius: 8px; cursor: pointer;
+                transition: background .12s ease;
             }
-            .lf-et-swatch:hover { background: #ede9fe; border-color: #7c3aed; }
-            .lf-et-sw-a { font: 800 11px/1 inherit; color: #212529; }
-            .lf-et-sw-bar { width: 16px; height: 4px; border-radius: 1px; }
-            .lf-et-sw-fill { width: 16px; height: 14px; border: 1px solid #cbd5e1; border-radius: 2px; }
+            .lf-et-swatch:hover { background: rgba(0,0,0,.06); }
+            .lf-et-sw-a { font: 600 11px/1 inherit; color: #1d1d1f; }
+            .lf-et-sw-bar { width: 17px; height: 3px; border-radius: 2px; }
+            .lf-et-sw-fill { width: 17px; height: 13px; border-radius: 3px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
 
             .lf-et-body {
-                margin: 0 18px 12px; padding: 12px 14px;
-                border: 1px solid #cbd5e1; border-radius: 0 0 6px 6px;
-                min-height: 260px; max-height: 46vh; overflow-y: auto;
-                font-size: 13px; line-height: 1.6; color: #1e293b;
-                background: #fff; outline: none;
+                flex: 1; margin: 12px 22px 0; padding: 18px 20px;
+                border: none; border-radius: 12px;
+                background: rgba(0,0,0,.025);
+                min-height: 280px; max-height: 44vh; overflow-y: auto;
+                font-size: 13.5px; line-height: 1.65; color: #1d1d1f;
+                letter-spacing: -.01em; outline: none;
+                transition: background .15s ease, box-shadow .15s ease;
             }
-            .lf-et-body:focus { border-color: #7c3aed; }
-            .lf-et-body .lf-et-ph { color: #6d28d9; font-weight: 700; }
+            .lf-et-body:focus {
+                background: #fff;
+                box-shadow: 0 0 0 3.5px rgba(0,122,255,.2), inset 0 0 0 1px rgba(0,122,255,.5);
+            }
+            .lf-et-body::-webkit-scrollbar { width: 9px; }
+            .lf-et-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 980px; border: 2px solid transparent; background-clip: content-box; }
+            .lf-et-body .lf-et-ph { color: #007aff; font-weight: 600; }
+
             .lf-et-foot {
-                display: flex; align-items: center; gap: 8px;
-                padding: 12px 18px; border-top: 1px solid #e2e8f0;
+                display: flex; align-items: center; gap: 10px;
+                padding: 18px 22px;
             }
             .lf-btn-sm {
-                padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
-                background: #fff; color: #475569; font: 700 12px inherit; cursor: pointer;
+                padding: 9px 20px; border-radius: 980px; border: none;
+                background: rgba(0,0,0,.06); color: #1d1d1f;
+                font: 500 13px inherit; cursor: pointer; letter-spacing: -.01em;
+                transition: background .15s ease, transform .1s ease;
             }
-            .lf-btn-sm:hover { border-color: #94a3b8; }
-            .lf-btn-primary-sm { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-            .lf-btn-primary-sm:hover { background: #6d28d9; border-color: #6d28d9; }
+            .lf-btn-sm:hover { background: rgba(0,0,0,.1); }
+            .lf-btn-sm:active { transform: scale(.97); }
+            .lf-btn-primary-sm { background: #007aff; color: #fff; font-weight: 600; }
+            .lf-btn-primary-sm:hover { background: #0071eb; }
+
+
+            /* v100.9.63: the shared colour picker, when it opens inside the template
+               editor. Scoped to .lf-et-box so the settings panel is untouched. */
+            .lf-et-box .lf-dt-palette {
+                border: none; border-radius: 14px; width: 188px; padding: 0 0 10px;
+                box-shadow: 0 16px 40px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.06);
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
+            }
+            .lf-et-box .lf-dt-pal-head {
+                background: transparent; border-bottom: .5px solid rgba(0,0,0,.08);
+                font-size: 12px; font-weight: 600; color: #1d1d1f; padding: 11px 6px;
+                letter-spacing: -.01em;
+            }
+            .lf-et-box .lf-dt-pal-clear {
+                width: calc(100% - 20px); margin: 10px; padding: 7px;
+                background: rgba(0,0,0,.05); border: none; border-radius: 980px;
+                font-size: 12px; font-weight: 500; color: #1d1d1f;
+            }
+            .lf-et-box .lf-dt-pal-clear:hover { background: rgba(0,0,0,.09); }
+            .lf-et-box .lf-dt-pal-grid { gap: 3px; padding: 0 10px; }
+            .lf-et-box .lf-dt-pal-sw { border-radius: 5px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.14); }
+            .lf-et-box .lf-dt-pal-sw:hover,
+            .lf-et-box .lf-dt-pal-sw.sel { outline: 2px solid #007aff; outline-offset: 1px; }
+            .lf-et-box .lf-dt-pal-custom { margin: 10px 10px 0; font-size: 11px; color: #86868b; font-weight: 500; }
+            .lf-et-box .lf-dt-pal-custom input { border: none; border-radius: 6px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
 
             /* v100.9.47: mortgage insurance, highlighted so it stands out from LTV */
             .lf-mi-appended {
@@ -3807,14 +3892,21 @@
                 'Dear Escrow,',
                 'We would like to order some items for the below loan:',
                 '',
-                'Main borrower: {borrower(s)}',
-                "Subject property: {subject property address}",
-                'Loan number: {loan number}',
+                '\tMain borrower: {main borrower}',
+                '\tPhone number: {main borrower phone}',
+                '\tDOB: {main borrower DOB}',
+                '\tEmail address: {main borrower email}',
+                '\t{co-borrowers}',
+                '\tSubject property: {Property address}',
+                '\tLoan number: {Loan#}',
+                '\tLoan amount: {loan amount}',
+                '\tOccupancy: {occupancy}',
+                '\tProperty type: {property type}',
+                "\tLoan Officer: {Loan officer's name} - {Loan officer's email address}",
+                "\tLoan Processor: {Loan processor's name} - {Loan processor's email address}",
+                '\tMortgage Clause: {mortgage clause}',
                 '',
                 '{list of to-do list item(s)}',
-                '',
-                "Loan Officer: {Loan officer's name} - {Loan officer's email address}",
-                "Loan Processor: {Loan processor's name} - {Loan processor's email address}",
                 '',
                 'Sincerely,'
             ].join('\n')
@@ -3838,14 +3930,19 @@
     const lfEtEscape = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     // {placeholders} in bold, [text](url) as a link, blank lines kept
+    // v100.9.61: a line that starts with a tab is indented, which is how the portal's
+    // own email lays out the loan details under the opening sentence.
     function lfEtToHtml(text, bold) {
         return String(text).split('\n').map(line => {
             if (!line.trim()) return '<div><br></div>';
+            const indented = /^\t/.test(line);
+            line = line.replace(/^\t+/, '');
             let h = lfEtEscape(line);
             h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
                 '<a href="$2" target="_blank" rel="noopener">$1</a>');
             if (bold) h = h.replace(/\{([^}]+)\}/g, '<b class="lf-et-ph">{</b>$1<b class="lf-et-ph">}</b>');
-            return '<div>' + h + '</div>';
+            return indented ? '<div style="margin-left: 40px;">' + h + '</div>'
+                            : '<div>' + h + '</div>';
         }).join('');
     }
 
@@ -3880,6 +3977,42 @@
         return pick(all);
     }
 
+    // v100.9.60: the escrow email states the loan in full - borrower, every
+    // co-borrower, property, amounts and the mortgage clause. These are read line by
+    // line from the body the portal generated, because the number of co-borrowers
+    // varies from loan to loan and cannot be a fixed set of placeholders.
+    function lfEtParseLoanBlock(bodyText) {
+        const out = { coBorrowers: [] };
+        const lines = String(bodyText || '').split('\n').map(l => l.replace(/\s+/g, ' ').trim());
+        const val = (l) => l.slice(l.indexOf(':') + 1).trim();
+
+        let cur = null;
+        for (const l of lines) {
+            if (/^main borrower\s*:/i.test(l))      { cur = out; out.borrower = val(l); continue; }
+            if (/^co-?borrower\s*:/i.test(l))       { cur = { name: val(l) }; out.coBorrowers.push(cur); continue; }
+            if (/^phone number\s*:/i.test(l))       { if (cur) cur.phone = val(l); continue; }
+            if (/^dob\s*:/i.test(l))                { if (cur) cur.dob = val(l); continue; }
+            if (/^email address\s*:/i.test(l))      { if (cur) cur.email = val(l); continue; }
+            if (/^subject property\s*:/i.test(l))   { out.property = val(l); cur = null; continue; }
+            if (/^loan number\s*:/i.test(l))        { out.loanNumber = val(l); continue; }
+            if (/^loan amount\s*:/i.test(l))        { out.loanAmount = val(l); continue; }
+            if (/^occupancy\s*:/i.test(l))          { out.occupancy = val(l); continue; }
+            if (/^property type\s*:/i.test(l))      { out.propertyType = val(l); continue; }
+            if (/^mortgage clause\s*:/i.test(l))    { out.mortgageClause = val(l); continue; }
+        }
+
+        // the clause often wraps onto the next line
+        if (out.mortgageClause) {
+            const i = lines.findIndex(l => /^mortgage clause\s*:/i.test(l));
+            for (let j = i + 1; j < lines.length; j++) {
+                const nx = lines[j];
+                if (!nx || /^(document|please click|sincerely)/i.test(nx) || /:/.test(nx.split(' ')[0] || '')) break;
+                if (/^[A-Z0-9]/.test(nx) && nx.length < 200) out.mortgageClause += ' ' + nx; else break;
+            }
+        }
+        return out;
+    }
+
     function lfEtPageFacts(editor) {
         const facts = {};
         const titleInput = Array.from(document.querySelectorAll('input')).find(i =>
@@ -3911,6 +4044,20 @@
         // version grabbed the first chip-looking element on the page, which on this
         // form is not the recipient - so the placeholder was left unfilled.
         facts.borrowerEmail = lfEtBorrowerEmail(body);
+
+        // v100.9.60: everything the escrow email needs
+        const blk = lfEtParseLoanBlock(body);
+        facts.mainBorrower  = blk.borrower || facts.borrower || '';
+        facts.mainPhone     = blk.phone || '';
+        facts.mainDob       = blk.dob || '';
+        facts.mainEmail     = blk.email || facts.borrowerEmail || '';
+        facts.coBorrowers   = blk.coBorrowers || [];
+        facts.loanAmount    = blk.loanAmount || '';
+        facts.occupancy     = blk.occupancy || '';
+        facts.propertyType  = blk.propertyType || '';
+        facts.mortgageClause = blk.mortgageClause || '';
+        if (!facts.property && blk.property) facts.property = blk.property;
+        if (!facts.loanNumber && blk.loanNumber) facts.loanNumber = blk.loanNumber;
         return facts;
     }
 
@@ -3968,7 +4115,15 @@
             '{Property address}': facts.property || '',
             '{loan number}': facts.loanNumber || '',
             '{Loan#}': facts.loanNumber || '',
-            "{borrower's name}": facts.borrower || ''
+            "{borrower's name}": facts.borrower || '',
+            '{main borrower}': facts.mainBorrower || '',
+            '{main borrower phone}': facts.mainPhone || '',
+            '{main borrower DOB}': facts.mainDob || '',
+            '{main borrower email}': facts.mainEmail || '',
+            '{loan amount}': facts.loanAmount || '',
+            '{occupancy}': facts.occupancy || '',
+            '{property type}': facts.propertyType || '',
+            '{mortgage clause}': facts.mortgageClause || ''
         };
     }
 
@@ -3984,6 +4139,34 @@
             Object.keys(map).forEach(k => { if (map[k]) v = v.split(k).join(map[k]); });
             if (v !== node.nodeValue) node.nodeValue = v;
         });
+
+        // v100.9.60: {co-borrowers} becomes one block per co-borrower, or disappears
+        // when the loan has none.
+        const coEl = Array.from(root.querySelectorAll('*'))
+            .find(el => (el.textContent || '').replace(/\s+/g, ' ').trim() === '{co-borrowers}');
+        if (coEl) {
+            const target = coEl.closest('div, p') || coEl;
+            const list = facts.coBorrowers || [];
+            if (list.length) {
+                // whatever indent the {co-borrowers} line carries is passed on to each
+                // block, so the expansion lines up with the rest of the details
+                const indent = (target.getAttribute && target.getAttribute('style')) || '';
+                const frag = document.createDocumentFragment();
+                list.forEach(c => {
+                    [['Co-borrower', c.name], ['Phone number', c.phone], ['DOB', c.dob], ['Email address', c.email]]
+                        .forEach(([k, v]) => {
+                            if (!v) return;
+                            const d = document.createElement('div');
+                            if (indent) d.setAttribute('style', indent);
+                            d.textContent = k + ': ' + v;
+                            frag.appendChild(d);
+                        });
+                });
+                target.replaceWith(frag);
+            } else {
+                target.remove();
+            }
+        }
 
         // the to-do list placeholder keeps the portal's own markup
         const all = Array.from(root.querySelectorAll('*'));
@@ -4157,6 +4340,8 @@
             { sep: true },
             { cmd: 'insertUnorderedList', html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3.5" cy="6" r="1.2" fill="currentColor"></circle><circle cx="3.5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="3.5" cy="18" r="1.2" fill="currentColor"></circle></svg>', title: 'Unordered list' },
             { cmd: 'insertOrderedList',   html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="9" y1="18" x2="21" y2="18"></line><text x="1" y="8" font-size="7" fill="currentColor" stroke="none">1</text><text x="1" y="14.5" font-size="7" fill="currentColor" stroke="none">2</text><text x="1" y="21" font-size="7" fill="currentColor" stroke="none">3</text></svg>', title: 'Ordered list' },
+            { cmd: 'outdent', html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><polyline points="7 8 3 12 7 16"></polyline></svg>', title: 'Decrease indent' },
+            { cmd: 'indent',  html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><polyline points="3 8 7 12 3 16"></polyline></svg>', title: 'Increase indent' },
             { sep: true },
             { cmd: 'createLink',    html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"></path></svg>', title: 'Insert link' },
             { sep: true },
@@ -4245,11 +4430,30 @@
 
         // v100.9.56: the toolbar follows the cursor. Without this the size box kept
         // showing whatever was set last, so selecting smaller text still read 16px.
-        const syncToolbar = () => {
-            if (!document.activeElement || !body.contains(document.activeElement) &&
-                document.activeElement !== body) {
-                if (!body.contains(window.getSelection && window.getSelection().anchorNode)) return;
+        // v100.9.62: reads what is actually rendered - size, colours and the on/off
+        // states - from the element the cursor or the pointer is in.
+        const syncFrom = (node) => {
+            if (!node) return;
+            if (node.nodeType === 3) node = node.parentElement;
+            if (!node || !body.contains(node)) return;
+            const cs = getComputedStyle(node);
+
+            const px = String(Math.round(parseFloat(cs.fontSize)));
+            sizeSel.value = sizeSel.querySelector('option[value="' + px + '"]') ? px : '';
+
+            const fg = lfEtRgbToHex(cs.color);
+            if (fg && foreBtn) foreBtn.querySelector('.lf-et-sw-bar').style.background = fg;
+
+            let bgNode = node, bg = '';
+            while (bgNode && body.contains(bgNode)) {
+                const b = getComputedStyle(bgNode).backgroundColor;
+                if (b && !/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/i.test(b)) { bg = lfEtRgbToHex(b); break; }
+                bgNode = bgNode.parentElement;
             }
+            if (backBtn) backBtn.querySelector('.lf-et-sw-fill').style.background = bg || 'transparent';
+        };
+
+        const syncToolbar = () => {
             const state = (c) => { try { return document.queryCommandState(c); } catch (e) { return false; } };
             wrap.querySelectorAll('.lf-et-tool[data-cmd]').forEach(b => {
                 const c = b.dataset.cmd;
@@ -4257,22 +4461,8 @@
                     b.classList.toggle('on', state(c));
                 }
             });
-            // the real rendered size of whatever the cursor is in
-            let px = '';
-            try {
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount) {
-                    let n = sel.anchorNode;
-                    if (n && n.nodeType === 3) n = n.parentElement;
-                    if (n && body.contains(n)) px = String(Math.round(parseFloat(getComputedStyle(n).fontSize)));
-                }
-            } catch (e) {}
-            sizeSel.value = (px && sizeSel.querySelector('option[value="' + px + '"]')) ? px : '';
-
-            let fg = '';
-            try { fg = document.queryCommandValue('foreColor'); } catch (e) {}
-            const hex = lfEtRgbToHex(fg);
-            if (hex && foreBtn) foreBtn.querySelector('.lf-et-sw-bar').style.background = hex;
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount && body.contains(sel.anchorNode)) syncFrom(sel.anchorNode);
         };
 
         const exec = (cmd, val) => {
@@ -4295,22 +4485,38 @@
         });
         const sizeSel = wrap.querySelector('.lf-et-size');
         sizeSel.addEventListener('mousedown', () => body.focus());
-        sizeSel.addEventListener('change', () => {
-            if (!sizeSel.value) return;
-            // execCommand only knows 1-7, so the point size is applied to the elements
-            // it produces - the same trick the portal's own editor uses.
-            body.focus();
+        // v100.9.62: the size is applied by wrapping the selection directly. Going via
+        // execCommand('fontSize', '7') and converting afterwards left text at the
+        // browser's size 7 - roughly 48px - whenever the markup it produced did not
+        // match what the conversion looked for. Wrapping is exact: 16 means 16.
+        const applyFontSize = (px) => {
+            const sel = window.getSelection();
+            if (!sel || !sel.rangeCount || sel.isCollapsed) { showToast('Select some text first'); return; }
+            const range = sel.getRangeAt(0);
+            if (!body.contains(range.commonAncestorContainer)) return;
+
+            const span = document.createElement('span');
+            span.style.fontSize = px + 'px';
             try {
-                document.execCommand('fontSize', false, '7');
-                body.querySelectorAll('font[size="7"]').forEach(f => {
-                    const sp = document.createElement('span');
-                    sp.style.fontSize = sizeSel.value + 'px';
-                    while (f.firstChild) sp.appendChild(f.firstChild);
-                    f.replaceWith(sp);
-                });
-            } catch (e) {}
+                range.surroundContents(span);
+            } catch (e) {
+                // the selection crosses element boundaries - move it wholesale
+                span.appendChild(range.extractContents());
+                range.insertNode(span);
+            }
+            // clear any size set deeper inside, so the new one actually shows
+            span.querySelectorAll('font[size], [style*="font-size"]').forEach(el => {
+                if (el.tagName === 'FONT') el.removeAttribute('size');
+                if (el.style) el.style.fontSize = '';
+            });
+
+            const r2 = document.createRange();
+            r2.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(r2);
             syncToolbar();
-        });
+        };
+        sizeSel.addEventListener('change', () => { if (sizeSel.value) applyFontSize(sizeSel.value); });
 
         // the portal's own colour picker, reused
         const foreBtn = wrap.querySelector('.lf-et-swatch[data-kind="fg"]');
@@ -4340,6 +4546,13 @@
         });
 
         ['keyup', 'mouseup', 'input', 'focus'].forEach(ev => body.addEventListener(ev, syncToolbar));
+        // hovering shows the formatting under the pointer, as long as nothing is selected
+        body.addEventListener('mouseover', (e) => {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount && !sel.isCollapsed) return;   // a selection wins
+            syncFrom(e.target);
+        });
+        body.addEventListener('mouseleave', syncToolbar);
         const onSelChange = () => { if (document.activeElement === body) syncToolbar(); };
         document.addEventListener('selectionchange', onSelChange);
         syncToolbar();
@@ -4555,7 +4768,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.59</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.63</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
