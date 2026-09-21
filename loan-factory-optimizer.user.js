@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.58
+// @version      100.9.59
 // @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.58 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.59 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3914,11 +3914,46 @@
         return facts;
     }
 
-    // the existing to-do list in the body, kept as-is
-    function lfEtExistingList(editor) {
+    // v100.9.59: the to-do items are not always an <ol>/<ul>. The escrow email puts
+    // them in a table (Document / Upload), which is why its list came out blank while
+    // the borrower one worked. The search is also limited to the body between "Dear"
+    // and "Sincerely," so the signature block's own table is never mistaken for it.
+    function lfEtExistingList(editor, marks) {
         if (!editor) return '';
-        const list = editor.querySelector('ol, ul');
-        return list ? list.outerHTML : '';
+
+        let scope = [];
+        if (marks && marks.kids) {
+            for (let i = marks.sIdx; i <= marks.eIdx; i++) if (marks.kids[i]) scope.push(marks.kids[i]);
+        } else {
+            scope = [editor];
+        }
+
+        const findIn = (sel, test) => {
+            for (const el of scope) {
+                const cands = [];
+                if (el.matches && el.matches(sel)) cands.push(el);
+                if (el.querySelectorAll) cands.push(...el.querySelectorAll(sel));
+                for (const c of cands) {
+                    if (test && !test(c)) continue;
+                    return c;
+                }
+            }
+            return null;
+        };
+
+        // a real list first
+        const list = findIn('ol, ul');
+        if (list) return list.outerHTML;
+
+        // then a table that actually holds to-do items - the signature table has none
+        const table = findIn('table', (t) => {
+            const txt = (t.textContent || '').toLowerCase();
+            if (/nmls|loan processor\s*$|www\.loanfactory/.test(txt)) return false;   // signature
+            return /document|upload|condition|item/.test(txt) || t.querySelectorAll('tr').length > 1;
+        });
+        if (table) return table.outerHTML;
+
+        return '';
     }
 
     function lfEtFillMap(facts) {
@@ -3951,14 +3986,17 @@
         });
 
         // the to-do list placeholder keeps the portal's own markup
-        if (listHtml) {
-            const all = Array.from(root.querySelectorAll('*'));
-            const holderEl = all.find(el => (el.textContent || '').trim() === '{list of to-do list item(s)}');
-            if (holderEl) {
+        const all = Array.from(root.querySelectorAll('*'));
+        const holderEl = all.find(el => (el.textContent || '').replace(/\s+/g, ' ').trim() === '{list of to-do list item(s)}');
+        if (holderEl) {
+            const target = holderEl.closest('div, p') || holderEl;
+            if (listHtml) {
                 const tmp = document.createElement('div');
                 tmp.innerHTML = listHtml;
                 const listNode = tmp.firstElementChild;
-                if (listNode) (holderEl.closest('div, p') || holderEl).replaceWith(listNode);
+                if (listNode) target.replaceWith(listNode);
+            } else {
+                target.remove();   // nothing to put there - do not leave the raw placeholder
             }
         }
         return root;
@@ -4021,7 +4059,7 @@
         }
 
         const facts = lfEtPageFacts(editor);
-        const listHtml = lfEtExistingList(editor);
+        const listHtml = lfEtExistingList(editor, marks);
 
         const holder = document.createElement('div');
         holder.innerHTML = lfEtHtml(which);
@@ -4517,7 +4555,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.58</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.59</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
