@@ -1,11 +1,11 @@
 # Loan Factory Optimizer
 
-![Version](https://img.shields.io/badge/version-100.9.45-blue)
+![Version](https://img.shields.io/badge/version-100.9.64-blue)
 ![Userscript](https://img.shields.io/badge/type-userscript-orange)
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
 
-A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, colour-coded pipelines, calculated LTV, drag-and-drop uploads, keyboard search, and editor conveniences.
+A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, calculated LTV and mortgage insurance, reusable email templates, drag-and-drop uploads, keyboard search, and editor conveniences.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
 
@@ -114,7 +114,7 @@ Open Loan Factory and go to your pipeline. You should see:
 To confirm precisely, press **F12** to open the browser console. You should see:
 
 ```
-[LF Optimizer] v100.9.45 loaded
+[LF Optimizer] v100.9.64 loaded
 ```
 
 <img width="995" height="386" alt="image" src="https://github.com/user-attachments/assets/c4f127d9-1741-45bb-bc57-e3f450e3ac8d" />
@@ -131,7 +131,7 @@ Click the **Tampermonkey icon** → **Utilities** → **Check for userscript upd
 
 If a newer version exists, Tampermonkey shows it and installs it on confirmation.
 
-**Your settings are not affected.** Colours, text styles, due dates and schedules live in your browser's storage for loanfactory.com, entirely separate from the script.
+**Your settings are not affected.** Colours, text styles, email templates, due dates and schedules live in your browser's storage for loanfactory.com, entirely separate from the script.
 
 > Updates can take up to 5 minutes to appear after a new version is published, because GitHub caches raw files for that long. If you just heard a new version is out, wait a few minutes and check again.
 
@@ -149,9 +149,42 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 | Feature | What it does |
 |---|---|
 | **Search hotkey** | One keystroke (`\` by default) focuses the search box from anywhere |
-| **Keyboard results** | The first **LOAN / LEAD / APPLICATION** badge is marked with a neon ring that runs clockwise around it. **↑ / ↓** move the mark, **Enter** opens it |
+| **Keyboard results** | The first **LOAN / LEAD / APPLICATION** badge is marked with a neon ring that runs clockwise around it |
 
-The search is opened from the keyboard, so it can be finished from the keyboard — no reaching for the mouse to click the badge. The marked result scrolls into view as you move down a long list.
+| Key | Action |
+|---|---|
+| ↑ / ↓ | Move the mark between results |
+| Enter | Open the marked record |
+| Esc | Close the results |
+
+The search is opened from the keyboard, so it can be finished from the keyboard. The marked result scrolls into view as you move down a long list.
+
+### To-do email templates
+
+Writing the same email by hand every time is the thing this replaces. Two templates are stored — one for the borrower, one for escrow — and applied automatically on the **Send To-do List** page when the template is `condition_document`.
+
+| Feature | What it does |
+|---|---|
+| **Editable body** | A full editor: bold, italic, underline, strikethrough, point sizes, text and highlight colour, lists, indent, links |
+| **Editable title** | The subject line follows its own template |
+| **Placeholders** | Anything in `{braces}` is filled from the loan when the template is used |
+| **Reset** | Restores the original wording and title |
+
+Placeholders available:
+
+| Placeholder | Filled with |
+|---|---|
+| `{borrower's name}` · `{main borrower}` | Borrower name |
+| `{main borrower phone}` · `{main borrower DOB}` · `{main borrower email}` | Main borrower details |
+| `{co-borrowers}` | Every co-borrower, however many — name, phone, DOB and email each |
+| `{Property address}` · `{Loan#}` · `{loan amount}` | Loan details |
+| `{occupancy}` · `{property type}` · `{mortgage clause}` | Loan details |
+| `{Loan officer's name}` · `{Loan officer's email address}` | Loan officer |
+| `{Loan processor's name}` · `{Loan processor's email address}` | Loan processor |
+| `{Borrower 1's email address}` | The address in the **To** field |
+| `{list of to-do list item(s)}` | The list the portal generated, kept exactly as-is |
+
+**Only the body between "Dear …" and "Sincerely," is replaced.** The Loan Factory logo above it and the signature, reply-all notice and security notice below it are left as the portal built them. If those two markers can't be found, nothing is changed.
 
 ### Pipeline
 
@@ -170,27 +203,35 @@ The search is opened from the keyboard, so it can be finished from the keyboard 
 |---|---|
 | **Drag & drop upload** | A drop box under every **Upload** button. Drag a file from your desktop onto it and it goes straight into that condition — no file picker, no folder browsing |
 
-The box fits whatever height the row has, stays quiet until you need it, and shows a green tick with the file name once the file is on its way. Several files can be dropped at once where the condition accepts them. Clicking the box still opens the normal file picker.
+The whole Upload cell accepts the drop, not just the dashed box, so the target is bigger than it looks. It sits below every button in the cell, including **Bypass**. Several files can be dropped at once where the condition accepts them, and clicking the box still opens the normal file picker.
 
 ### Loan Summary
 
 | Feature | What it does |
 |---|---|
-| **Calculated LTV** | Shown on both money rows, worked out against the appraised value — not copied from the portal's own field |
+| **Calculated LTV** | Shown on both money rows, worked out against the appraised value |
 | **LTV colour scale** | The percentage is bold and shaded green → yellow → red as it climbs |
-| **Downpayment** | Appraised value minus total loan amount, shown beside the LTV, with its own copy button |
+| **Downpayment** | The lesser of property value and appraised value, minus the base loan amount |
+| **Mortgage insurance** | Monthly MI beside the LTV on the Loan amount row, highlighted, with a copy button |
 | **Instant copy buttons** | Appear the moment the panel opens, and stay put when the panel re-renders |
 
-LTV is calculated per row:
+LTV per row:
 
 | Row | Formula |
 |---|---|
 | Total loan amount | total loan amount ÷ appraised value |
 | Loan amount | loan amount ÷ appraised value |
 
-*Example: $628,306 ÷ $650,000 = **96.66%**, and Downpayment = **$21,694**.*
+**Mortgage insurance** is shown only where it applies:
 
-Property value is used as the basis only when no appraised value has been entered yet.
+| Loan type | Shown? | Rate |
+|---|---|---|
+| FHA | Always | HUD Mortgagee Letter 2023-05 — 15 to 75 bps by loan size, LTV and term |
+| Conventional, LTV > 80% | Yes | LTV-banded rate table |
+| Conventional, LTV ≤ 80% | No | — |
+| VA, USDA, Non-QM, Jumbo | No | — |
+
+> The FHA figures come straight from HUD and are exact. **Conventional PMI rates are an estimate** — Fannie Mae sets the required *coverage* (12/25/30/35% by LTV, per Selling Guide B7-1-02, shown in the tooltip) but not the premium, which each MI company prices by credit score. Treat the conventional figure as a guide, not a quote.
 
 ### 1003 Application
 
@@ -220,9 +261,7 @@ Property value is used as the basis only when no appraised value has been entere
 
 The Underwriter clock starts at the created time; the Disclosure Specialist clock starts at the assign time.
 
-**Working hours**
-
-Everything is stated in Pacific, because that is the clock the portal's own timestamps use. Pick the row that matches your working day:
+**Working hours** — stated in Pacific, because that is the clock the portal's own timestamps use:
 
 | Option | Hours counted |
 |---|---|
@@ -231,7 +270,7 @@ Everything is stated in Pacific, because that is the clock the portal's own time
 | Mountain | 8:00 AM – 5:00 PM PST |
 | **West Coast** *(default)* | 9:00 AM – 6:00 PM PST |
 
-Only Monday to Friday counts, and only hours inside the chosen window. Changing the setting recalculates every due date on the page immediately, and the "Counted…" line under the rules updates to match.
+Monday to Friday only. Changing the setting recalculates every due date on the page immediately, and the "Counted…" line updates to match.
 
 ### Editing
 
@@ -251,7 +290,7 @@ Only Monday to Friday counts, and only hours inside the chosen window. Changing 
 | **Auto-availability** | Schedules your availability status |
 | **Auto-navigate to Docs** | Jumps straight to the Docs tab when opening a loan |
 | **Auto-collapse sidebar** | Reclaims screen width automatically |
-| **Backup & Restore** | Exports every setting to a JSON file |
+| **Backup & Restore** | Exports every setting to a JSON file, including both email templates |
 | **System Notices** | Optionally auto-dismisses the portal's "WARNING NOTICE" pop-up — **off by default** |
 
 ---
@@ -299,13 +338,19 @@ Then open your extensions page and check the ID shown there. **If the two IDs di
 
 If this keeps happening after restarts, switch to Firefox. It's a Manifest V3 limitation in Chrome and Edge that affects large scripts.
 
+### The email template didn't apply
+
+- The template only runs when the **Template** field is `condition_document`
+- The matching switch has to be on in **To-do Email Templates**
+- The body needs both a "Dear …" line and a "Sincerely," line. Without them nothing is touched, deliberately — better to leave the email alone than to mangle it
+
 ### Due dates look wrong
 
-Check **Working hours** in the Tickets Turn-time card. A ticket assigned late in your day rolls over to the next morning, so a 4-hour SLA can legitimately land tomorrow. The "Counted…" line under the rules tells you exactly which window is being used.
+Check **Working hours** in the Tickets Turn-time card. A ticket assigned late in your day rolls over to the next morning, so a 4-hour SLA can legitimately land tomorrow. The "Counted…" line under the rules tells you which window is being used.
 
 ### Drag & drop upload isn't working
 
-- Drop the file **onto the dashed box**, not onto the Upload button
+- Drop the file anywhere in the **Upload** cell — the dashed box is the label, the whole cell is the target
 - If the portal shows a confirmation dialog after the drop, finish it as usual — the script only fills in the file
 - Clicking the box opens the normal file picker, so that route always remains available
 
@@ -334,7 +379,7 @@ No. The script runs entirely in your browser, reads and modifies only pages you 
 It only adds things to pages — buttons, colours, labels. If something looks wrong, disable the script and the portal returns to normal immediately.
 
 **Can I use it on more than one computer?**
-Yes. Install it on each, then use **Export Settings** on one and **Import Settings** on the others to match your configuration.
+Yes. Install it on each, then use **Export Settings** on one and **Import Settings** on the others. The export includes your email templates, so the wording travels with it.
 
 **Do I need to reinstall when a new version comes out?**
 No, as long as you installed from the raw link. Use **Utilities → Check for userscript updates**.
@@ -344,6 +389,9 @@ Chrome and Edge reset the "Allow User Scripts" permission when they update. Turn
 
 **Why is the LTV different from the portal's own LTV field?**
 This one is calculated against the appraised value, so it stays correct even when the portal's field is stale or empty.
+
+**Can I trust the mortgage insurance figure?**
+The FHA number is exact — HUD publishes fixed rates and the script follows them. The conventional number is an estimate, because Fannie Mae sets the required coverage but not the premium; each MI company prices that by credit score. Use it as a guide and confirm before quoting.
 
 **Why are the working hours written in Pacific time?**
 The portal's timestamps are already on Pacific, so stating the window in the same clock avoids converting twice. Picking "East Coast" gives 6 AM – 3 PM Pacific, which is a normal 9-to-5 on the east coast.
@@ -358,7 +406,9 @@ No. The file is placed into the portal's own upload field and the portal handles
 Releasing a new version:
 
 1. Bump `@version` in the metadata block — Tampermonkey only offers an update when this number increases
-2. Update the date in `@name`, format `Update Mon DDth, YYYY`
+2. Update the date in `@description`, format `Update Mon DDth, YYYY`
 3. Upload to the repo **keeping the file name exactly** `loan-factory-optimizer.user.js` — the update URL must never change
+
+**`@name` must never change.** Tampermonkey identifies a script by `@name` + `@namespace`, so a new name reads as a different script: the raw link then offers "Install" instead of "Update", and the user ends up running two copies at once. The release date lives in `@description` for exactly that reason.
 
 The metadata block must contain **only** `// @key value` lines. A stray comment inside it — or the literal block delimiters appearing in a comment elsewhere in the file — can stop Tampermonkey reading `@match` and `@version`, which makes the script silently fail to run.
