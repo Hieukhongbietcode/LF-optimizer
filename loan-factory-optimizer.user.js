@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.65
-// @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.69
+// @description  Update Sept 21st, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.65 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.69 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3599,23 +3599,39 @@
     const LF_DROP_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
     function lfDropBoxContent(text) { return LF_DROP_ICON + '<span class="lf-drop-text">' + text + '</span>'; }
 
+    // v100.9.68: RESTORED. This definition was deleted along with the old sizer in
+    // v100.9.53 while its two call sites stayed. Calling it threw immediately, the
+    // try/catch around the injector swallowed the error, and the drop box silently
+    // stopped being created - with nothing in the console to show for it.
+    //
+    // Some rows carry a Bypass button under Upload, so the box has to sit below
+    // whichever control comes last or it lands between the two.
+    function lfTodoLastControl(cell) {
+        const ctrls = Array.from(cell.querySelectorAll('button, a, .btn'))
+            .filter(el => !el.classList.contains('lf-drop-box') && !el.closest('.lf-drop-box'));
+        return ctrls.length ? ctrls[ctrls.length - 1] : null;
+    }
+
     function lfInjectTodoDropZones() {
-        // Only on a to-do list, and only in the Upload column
-        const tables = document.querySelectorAll('table');
-        tables.forEach(table => {
-            const heads = Array.from(table.querySelectorAll('thead th, thead td'));
-            const upIdx = heads.findIndex(h => /^upload$/i.test((h.textContent || '').trim()));
-            if (upIdx < 0) return;
+        // v100.9.67: the column is found from the Upload buttons themselves rather than
+        // from a header. The old version required the heading to sit inside a <thead>;
+        // the compliance and to-do tables do not use one, so it matched nothing and no
+        // box was ever created. Working from the buttons is structure-independent.
+        const triggers = Array.from(document.querySelectorAll('button, a, .btn'))
+            .filter(b => /^upload$/i.test((b.textContent || '').replace(/\s+/g, ' ').trim()));
 
-            table.querySelectorAll('tbody tr').forEach(row => {
-                const cell = row.cells && row.cells[upIdx];
-                if (!cell || cell.dataset.lfDropDone === '1') return;
-                const btns = Array.from(row.querySelectorAll('button, a, .btn'));
-                const trigger = Array.from(cell.querySelectorAll('button, a, .btn'))
-                    .find(b => /^upload$/i.test((b.textContent || '').trim()));
-                if (!trigger) return;
-
-                cell.dataset.lfDropDone = '1';
+        triggers.forEach(trigger => {
+            const cell = trigger.closest('td');
+            if (!cell) return;                                   // only inside a table row
+            // v100.9.69: check for the box itself instead of a "done" flag on the cell.
+            // The flag survived the portal re-rendering the cell's contents, so any row
+            // that was redrawn lost its box and never got another one - which is why
+            // some rows had one and some did not.
+            if (cell.querySelector('.lf-drop-box')) return;
+            const row = cell.closest('tr');
+            if (!row) return;
+            const btns = Array.from(row.querySelectorAll('button, a, .btn'));
+            {
                 cell.classList.add('lf-drop-cell');
                 const box = document.createElement('div');
                 box.className = 'lf-drop-box';
@@ -3678,7 +3694,7 @@
 
                 const last = lfTodoLastControl(cell) || trigger;
                 last.parentNode.insertBefore(box, last.nextSibling);
-            });
+            }
         });
     }
 
@@ -4776,7 +4792,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.65</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.69</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
