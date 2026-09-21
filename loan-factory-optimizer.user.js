@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.63
+// @version      100.9.64
 // @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.63 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.64 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -2466,9 +2466,9 @@
                only thing with weight on screen. */
             .lf-et-modal {
                 position: fixed; inset: 0; z-index: 2147483600;
-                background: rgba(0, 0, 0, .28);
-                -webkit-backdrop-filter: saturate(180%) blur(20px);
-                backdrop-filter: saturate(180%) blur(20px);
+                background: rgba(0, 0, 0, .12);
+                -webkit-backdrop-filter: saturate(140%) blur(6px);
+                backdrop-filter: saturate(140%) blur(6px);
                 display: flex; align-items: center; justify-content: center;
                 font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
                 animation: lfEtFade .18s ease;
@@ -4484,7 +4484,24 @@
             });
         });
         const sizeSel = wrap.querySelector('.lf-et-size');
-        sizeSel.addEventListener('mousedown', () => body.focus());
+        // v100.9.64: the old version called body.focus() on mousedown, which pulled
+        // focus away the instant the dropdown opened - so it only worked if you held
+        // the button down and dragged. The selection is remembered instead, and put
+        // back just before the size is applied.
+        let savedRange = null;
+        const rememberRange = () => {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount && body.contains(sel.anchorNode)) savedRange = sel.getRangeAt(0).cloneRange();
+        };
+        const restoreRange = () => {
+            if (!savedRange) return false;
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(savedRange);
+            return true;
+        };
+        ['keyup', 'mouseup'].forEach(ev => body.addEventListener(ev, rememberRange));
+        sizeSel.addEventListener('mousedown', rememberRange);
         // v100.9.62: the size is applied by wrapping the selection directly. Going via
         // execCommand('fontSize', '7') and converting afterwards left text at the
         // browser's size 7 - roughly 48px - whenever the markup it produced did not
@@ -4516,7 +4533,12 @@
             sel.addRange(r2);
             syncToolbar();
         };
-        sizeSel.addEventListener('change', () => { if (sizeSel.value) applyFontSize(sizeSel.value); });
+        sizeSel.addEventListener('change', () => {
+            if (!sizeSel.value) return;
+            body.focus();
+            restoreRange();
+            applyFontSize(sizeSel.value);
+        });
 
         // the portal's own colour picker, reused
         const foreBtn = wrap.querySelector('.lf-et-swatch[data-kind="fg"]');
@@ -4535,7 +4557,7 @@
         };
 
         [foreBtn, backBtn].forEach(btn => {
-            btn.addEventListener('mousedown', (e) => e.preventDefault());
+            btn.addEventListener('mousedown', (e) => { rememberRange(); e.preventDefault(); });
             btn.addEventListener('click', (e) => {
                 e.preventDefault(); e.stopPropagation();
                 const isBg = btn.dataset.kind === 'bg';
@@ -4560,6 +4582,9 @@
         const close = () => {
             document.removeEventListener('selectionchange', onSelChange);
             wrap.remove();
+            // v100.9.64: hand the user back to the settings panel they came from
+            const panel = document.getElementById('lf-color-panel');
+            if (panel) panel.classList.add('open');
         };
         wrap.querySelector('[data-close]').onclick = close;
         wrap.querySelector('[data-cancel]').onclick = close;
@@ -4768,7 +4793,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.63</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.64</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -5047,6 +5072,10 @@
         document.addEventListener('mousedown', (e) => {
             if (colorPanel && colorPanel.classList.contains('open')) {
                 const toggleBtn = document.getElementById('lf-nav-color-btn');
+                // v100.9.64: a click inside the template editor is not a click outside
+                // the panel - Cancel used to close both, so the panel had to be
+                // reopened for any further setting.
+                if (e.target.closest && e.target.closest('.lf-et-modal, .lf-dt-palette')) return;
                 if (!colorPanel.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
                     // v100.8.70: the font list is fixed-positioned, so it must be removed
                     // with the panel or it would be left floating over the page
