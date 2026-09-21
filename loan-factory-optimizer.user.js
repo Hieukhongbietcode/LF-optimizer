@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.64
+// @version      100.9.65
 // @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.64 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.65 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -2476,6 +2476,24 @@
             @keyframes lfEtFade { from { opacity: 0 } to { opacity: 1 } }
             @keyframes lfEtRise { from { opacity: 0; transform: translateY(12px) scale(.985) } to { opacity: 1; transform: none } }
 
+            /* v100.9.65: closing runs the opening in reverse - the blur lifts off the
+               page as the card settles back down, rather than both vanishing at once. */
+            @keyframes lfEtFadeOut {
+                from { opacity: 1; background: rgba(0,0,0,.12); -webkit-backdrop-filter: saturate(140%) blur(6px); backdrop-filter: saturate(140%) blur(6px); }
+                to   { opacity: 0; background: rgba(0,0,0,0);   -webkit-backdrop-filter: saturate(100%) blur(0px); backdrop-filter: saturate(100%) blur(0px); }
+            }
+            @keyframes lfEtSink {
+                from { opacity: 1; transform: none }
+                to   { opacity: 0; transform: translateY(12px) scale(.985) }
+            }
+            .lf-et-modal.lf-et-closing {
+                animation: lfEtFadeOut .2s cubic-bezier(.4,0,1,1) forwards;
+                pointer-events: none;
+            }
+            .lf-et-modal.lf-et-closing .lf-et-box {
+                animation: lfEtSink .2s cubic-bezier(.4,0,1,1) forwards;
+            }
+
             .lf-et-box {
                 background: #fff; border-radius: 18px;
                 width: 720px; max-width: 94vw; max-height: 88vh;
@@ -2696,55 +2714,11 @@
                 font-size: 11px; font-weight: 800; letter-spacing: .2px;
             }
 
-            /* v100.9.36: to-do list drag & drop upload */
-            /* v100.9.39: quieter by default so a long list does not look busy - the
-               box only asserts itself when a file is actually over it. */
-            /* the cell only needs to be a positioning context - it stays a table cell */
-            td.lf-drop-cell { position: relative; }
-
-            .lf-drop-box {
-                position: absolute; left: 6px; right: 6px; bottom: 6px;
-                display: flex; flex-direction: column; align-items: center; justify-content: center;
-                gap: 3px;
-                box-sizing: border-box;
-                padding: 6px;
-                overflow: hidden;
-                border: 1px dashed rgba(100, 116, 139, .45);
-                border-radius: 6px;
-                background: transparent;
-                color: rgba(71, 85, 105, .75);
-                font-size: 10px; font-weight: 600; letter-spacing: .1px; line-height: 1.25;
-                text-align: center; cursor: pointer; user-select: none;
-                min-height: 30px;
-                transition: border-color .15s ease, background .15s ease, color .15s ease;
-            }
-            .lf-drop-box svg { opacity: .55; transition: opacity .15s ease, transform .15s ease; }
-            .lf-drop-box .lf-drop-text { pointer-events: none; }
-
-            .lf-drop-box:hover {
-                border-color: #6366f1;
-                background: rgba(99, 102, 241, .06);
-                color: #4f46e5;
-            }
-            .lf-drop-box:hover svg { opacity: 1; }
-
-            .lf-drop-box.lf-drop-over {
-                border: 1.5px solid #4f46e5;
-                background: rgba(99, 102, 241, .14);
-                color: #3730a3;
-                box-shadow: inset 0 0 0 3px rgba(99, 102, 241, .08);
-            }
-            .lf-drop-box.lf-drop-over svg { opacity: 1; transform: translateY(-2px); }
-
-            .lf-drop-box.lf-drop-busy { opacity: .55; cursor: progress; }
-
-            .lf-drop-box.lf-drop-ok {
-                border: 1.5px solid #16a34a;
-                background: rgba(22, 163, 74, .12);
-                color: #15803d;
-            }
-            .lf-drop-box.lf-drop-ok svg { opacity: 1; }
-
+            /* v100.9.66: a duplicate .lf-drop-box rule used to sit here, left over
+               from when the box was absolutely positioned. Being later in the
+               stylesheet it overrode the working rule above, and it depended on a
+               top value from a JS sizer that no longer exists - so the box had no
+               height and vanished from the page. Removed. */
             /* v100.9.20: Default Text Style presets */
             .lf-dt-preset {
                 display: inline-flex; align-items: center; gap: 5px;
@@ -4579,12 +4553,21 @@
         document.addEventListener('selectionchange', onSelChange);
         syncToolbar();
 
+        let closing = false;
         const close = () => {
+            if (closing) return;                       // a second click must not re-trigger it
+            closing = true;
             document.removeEventListener('selectionchange', onSelChange);
-            wrap.remove();
+            document.querySelectorAll('.lf-dt-palette').forEach(el => el.remove());
+            wrap.classList.add('lf-et-closing');
+
             // v100.9.64: hand the user back to the settings panel they came from
             const panel = document.getElementById('lf-color-panel');
             if (panel) panel.classList.add('open');
+
+            const done = () => { if (wrap.parentNode) wrap.remove(); };
+            wrap.addEventListener('animationend', done, { once: true });
+            setTimeout(done, 320);                     // in case the animation never fires
         };
         wrap.querySelector('[data-close]').onclick = close;
         wrap.querySelector('[data-cancel]').onclick = close;
@@ -4793,7 +4776,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.64</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.65</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
