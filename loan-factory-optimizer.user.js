@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.51
-// @description  Update Sept 17th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.58
+// @description  Update Sept 18th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.51 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.58 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -1844,7 +1844,7 @@
         '#630000','#7B3900','#846300','#295218','#083139','#003163','#21104A','#4A1031'
     ];
 
-    function lfDtOpenPalette(anchorBtn, kind, current, onPick) {
+    function lfDtOpenPalette(anchorBtn, kind, current, onPick, hostEl) {
         document.querySelectorAll('.lf-dt-palette').forEach(p => p.remove());
         const isBg = (kind === 'bg');
         const pal = document.createElement('div');
@@ -1860,7 +1860,9 @@
         // click as "outside" and collapsed the whole panel mid-customisation.
         // (The panel slides via `right`, not `transform`, so position:fixed still
         // resolves against the viewport and the popup lands where expected.)
-        const host = document.getElementById('lf-color-panel') || document.body;
+        // v100.9.58: the host can be passed in, so the template editor can mount the
+        // same picker inside its own dialog.
+        const host = hostEl || document.getElementById('lf-color-panel') || document.body;
         host.appendChild(pal);
 
         const r = anchorBtn.getBoundingClientRect();
@@ -2458,6 +2460,91 @@
                 z-index: -2;
             }
 
+            /* v100.9.52: to-do email templates */
+            .lf-et-modal {
+                position: fixed; inset: 0; z-index: 2147483600;
+                background: rgba(15, 23, 42, .5);
+                display: flex; align-items: center; justify-content: center;
+                font-family: inherit;
+            }
+            .lf-et-box {
+                background: #fff; border-radius: 10px; width: 660px; max-width: 94vw;
+                max-height: 86vh; display: flex; flex-direction: column;
+                box-shadow: 0 24px 60px rgba(0,0,0,.34);
+            }
+            .lf-et-head {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
+            }
+            .lf-et-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: #1e293b; }
+            .lf-et-reset {
+                margin-left: 12px; padding: 4px 12px;
+                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
+                font: 700 11px inherit; color: #475569; cursor: pointer;
+            }
+            .lf-et-reset:hover { border-color: #dc2626; color: #dc2626; }
+            .lf-et-title-row {
+                display: flex; align-items: center; gap: 10px;
+                margin: 12px 18px 0;
+            }
+            .lf-et-title-row label {
+                font-size: 11px; font-weight: 800; color: #64748b;
+                text-transform: uppercase; letter-spacing: .4px; flex: none;
+            }
+            .lf-et-title {
+                flex: 1; height: 30px; padding: 0 10px;
+                border: 1px solid #cbd5e1; border-radius: 6px;
+                font-size: 12px; color: #1e293b; font-family: inherit; background: #fff;
+            }
+            .lf-et-title:focus { border-color: #7c3aed; outline: none; }
+            .lf-et-x { background: none; border: none; font-size: 22px; line-height: 1; color: #94a3b8; cursor: pointer; }
+            .lf-et-note { padding: 10px 18px 0; font-size: 11px; color: #64748b; line-height: 1.55; }
+            .lf-et-tools {
+                display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+                margin: 10px 18px 0; padding: 6px 8px;
+                background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px 6px 0 0;
+                border-bottom: none;
+            }
+            .lf-et-tool {
+                min-width: 28px; height: 26px; padding: 0 6px;
+                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
+                font: 600 12px/1 inherit; color: #334155; cursor: pointer;
+            }
+            .lf-et-tool:hover { background: #ede9fe; border-color: #7c3aed; color: #6d28d9; }
+            .lf-et-tool.on { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+            .lf-et-sep { width: 1px; height: 18px; background: #cbd5e1; margin: 0 3px; }
+            .lf-et-size { height: 26px; min-width: 52px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; color: #334155; background: #fff; }
+            .lf-et-swatch {
+                display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+                width: 30px; height: 26px; padding: 2px 0; gap: 1px;
+                background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;
+            }
+            .lf-et-swatch:hover { background: #ede9fe; border-color: #7c3aed; }
+            .lf-et-sw-a { font: 800 11px/1 inherit; color: #212529; }
+            .lf-et-sw-bar { width: 16px; height: 4px; border-radius: 1px; }
+            .lf-et-sw-fill { width: 16px; height: 14px; border: 1px solid #cbd5e1; border-radius: 2px; }
+
+            .lf-et-body {
+                margin: 0 18px 12px; padding: 12px 14px;
+                border: 1px solid #cbd5e1; border-radius: 0 0 6px 6px;
+                min-height: 260px; max-height: 46vh; overflow-y: auto;
+                font-size: 13px; line-height: 1.6; color: #1e293b;
+                background: #fff; outline: none;
+            }
+            .lf-et-body:focus { border-color: #7c3aed; }
+            .lf-et-body .lf-et-ph { color: #6d28d9; font-weight: 700; }
+            .lf-et-foot {
+                display: flex; align-items: center; gap: 8px;
+                padding: 12px 18px; border-top: 1px solid #e2e8f0;
+            }
+            .lf-btn-sm {
+                padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
+                background: #fff; color: #475569; font: 700 12px inherit; cursor: pointer;
+            }
+            .lf-btn-sm:hover { border-color: #94a3b8; }
+            .lf-btn-primary-sm { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+            .lf-btn-primary-sm:hover { background: #6d28d9; border-color: #6d28d9; }
+
             /* v100.9.47: mortgage insurance, highlighted so it stands out from LTV */
             .lf-mi-appended {
                 margin-left: 8px;
@@ -2469,6 +2556,53 @@
                 white-space: nowrap;
             }
             .lf-mi-appended .lf-icon-btn { color: #663c00; }
+
+            /* v100.9.41: repeat counter on a coalesced toast */
+            .lf-toast2-count {
+                margin-left: 8px; padding: 1px 7px;
+                background: rgba(255,255,255,.22); border-radius: 999px;
+                font-size: 11px; font-weight: 800; letter-spacing: .2px;
+            }
+
+            /* v100.9.36: to-do list drag & drop upload */
+            /* v100.9.53: a fixed, compact box in normal flow. It used to be absolutely
+               positioned to fill whatever space the row had left, which meant rows
+               with an Upload AND a Bypass button squeezed it down to a sliver or hid
+               it completely. Now it always takes the same small amount of room and the
+               row grows by that much - and the whole cell accepts a drop anyway, so
+               the target is much bigger than the box looks. */
+            td.lf-drop-cell { position: relative; }
+            td.lf-drop-cell.lf-drop-over-cell { background: rgba(99, 102, 241, .10) !important; }
+
+            .lf-drop-box {
+                display: flex; align-items: center; justify-content: center; gap: 4px;
+                width: 100%; box-sizing: border-box;
+                margin-top: 5px; padding: 4px 6px;
+                min-height: 26px;
+                border: 1px dashed rgba(100, 116, 139, .5);
+                border-radius: 6px;
+                background: transparent;
+                color: rgba(71, 85, 105, .8);
+                font-size: 10px; font-weight: 600; line-height: 1.2;
+                text-align: center; cursor: pointer; user-select: none;
+                white-space: nowrap;
+                transition: border-color .15s ease, background .15s ease, color .15s ease;
+            }
+            .lf-drop-box svg { opacity: .6; flex: none; transition: opacity .15s ease; }
+            .lf-drop-box .lf-drop-text { pointer-events: none; overflow: hidden; text-overflow: ellipsis; }
+
+            .lf-drop-box:hover { border-color: #6366f1; background: rgba(99,102,241,.07); color: #4f46e5; }
+            .lf-drop-box:hover svg { opacity: 1; }
+
+            .lf-drop-box.lf-drop-over {
+                border: 1.5px solid #4f46e5; background: rgba(99,102,241,.16); color: #3730a3;
+            }
+            .lf-drop-box.lf-drop-over svg { opacity: 1; }
+            .lf-drop-box.lf-drop-busy { opacity: .55; cursor: progress; }
+            .lf-drop-box.lf-drop-ok {
+                border: 1.5px solid #16a34a; background: rgba(22,163,74,.14); color: #15803d;
+            }
+            .lf-drop-box.lf-drop-ok svg { opacity: 1; }
 
             /* v100.9.41: repeat counter on a coalesced toast */
             .lf-toast2-count {
@@ -3402,34 +3536,9 @@
         box.classList.remove('lf-drop-busy');
     }
 
-    const LF_DROP_LABEL = 'Drop file(s) here';
+    const LF_DROP_LABEL = 'Drop file(s)';
     const LF_DROP_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
     function lfDropBoxContent(text) { return LF_DROP_ICON + '<span class="lf-drop-text">' + text + '</span>'; }
-
-    // v100.9.40: the box is positioned absolutely inside the cell, so it fills the
-    // space the row already has and can never add to it. The old version measured the
-    // row and set a height - but the box lives inside that row, so every pass made the
-    // row taller and the box grew without end. All that is set here is where the box
-    // starts, just under the Upload button.
-    // v100.9.50: some rows carry a Bypass button under Upload. The drop box has to sit
-    // below whichever control comes last, or it lands between the two and covers one
-    // of them. This returns that last control rather than assuming it is Upload.
-    function lfTodoLastControl(cell) {
-        const ctrls = Array.from(cell.querySelectorAll('button, a, .btn'))
-            .filter(el => !el.classList.contains('lf-drop-box') && !el.closest('.lf-drop-box'));
-        return ctrls.length ? ctrls[ctrls.length - 1] : null;
-    }
-
-    function lfSizeTodoDropZones() {
-        document.querySelectorAll('.lf-drop-box').forEach(box => {
-            const cell = box.closest('td');
-            if (!cell) return;
-            const trigger = lfTodoLastControl(cell);
-            const top = trigger ? (trigger.offsetTop + trigger.offsetHeight + 6) : 6;
-            const want = top + 'px';
-            if (box.style.top !== want) box.style.top = want;
-        });
-    }
 
     function lfInjectTodoDropZones() {
         // Only on a to-do list, and only in the Upload column
@@ -3471,6 +3580,37 @@
                     const files = e.dataTransfer && e.dataTransfer.files;
                     lfTodoDeliverFiles(box, files);
                 });
+
+                // v100.9.53: dropping anywhere in the Upload cell counts - the box is
+                // the label, the cell is the target.
+                if (cell.dataset.lfCellDrop !== '1') {
+                    cell.dataset.lfCellDrop = '1';
+                    ['dragenter', 'dragover'].forEach(ev => cell.addEventListener(ev, (e) => {
+                        if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+                        e.preventDefault(); e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'copy';
+                        cell.classList.add('lf-drop-over-cell');
+                        const b = cell.querySelector('.lf-drop-box');
+                        if (b) b.classList.add('lf-drop-over');
+                    }));
+                    ['dragleave', 'dragend'].forEach(ev => cell.addEventListener(ev, (e) => {
+                        if (cell.contains(e.relatedTarget)) return;
+                        cell.classList.remove('lf-drop-over-cell');
+                        const b = cell.querySelector('.lf-drop-box');
+                        if (b) b.classList.remove('lf-drop-over');
+                    }));
+                    cell.addEventListener('drop', (e) => {
+                        const files = e.dataTransfer && e.dataTransfer.files;
+                        if (!files || !files.length) return;
+                        e.preventDefault(); e.stopPropagation();
+                        cell.classList.remove('lf-drop-over-cell');
+                        const b = cell.querySelector('.lf-drop-box');
+                        if (!b) return;
+                        b.classList.remove('lf-drop-over');
+                        b.classList.add('lf-drop-busy');
+                        lfTodoDeliverFiles(b, files);
+                    });
+                }
                 // clicking it behaves like the Upload button, for convenience
                 box.addEventListener('click', (e) => {
                     e.preventDefault(); e.stopPropagation();
@@ -3619,6 +3759,577 @@
         try { clickable.click(); } catch (err) {}
         document.querySelectorAll('.lf-gs-active').forEach(el => el.classList.remove('lf-gs-active'));
         lfGsIndex = 0;
+    }
+
+    // ==========================================
+    // TO-DO EMAIL TEMPLATES (v100.9.52)
+    //
+    // The Send To-do List page pre-fills a body that has to be rewritten by hand every
+    // time. These templates hold the wording once; the placeholders in {braces} are
+    // filled from the page itself when the template is applied.
+    //
+    // Only the body is touched - from the "Dear ..." line down to "Sincerely,". The
+    // Loan Factory logo above it and the signature, reply-all notice and security
+    // notice below it are left exactly as the portal built them.
+    // ==========================================
+    const LF_ET = {
+        borrower: {
+            key: 'lf_email_tpl_borrower',
+            onKey: 'lf_email_tpl_borrower_on',
+            titleKey: 'lf_email_tpl_borrower_title',
+            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan conditions that need your help.",
+            label: 'Customized borrower to-do email',
+            hint: 'Used when the template is condition_document and the email is addressed to the borrower.',
+            def: [
+                'Dear {borrower(s)},',
+                'Below is the list of documents required from you. In order to meet your close date and/or lock expiration date, please send all documents back to us at your earliest convenience.',
+                '',
+                '{list of to-do list item(s)}',
+                '',
+                "Please [log in](https://www.loanfactory.com/login) to your account to upload documents, using the email association with your application {Borrower 1's email address}",
+                'If replying to this email, be sure to reply-all.',
+                'Feel free to contact us with any questions or concerns.',
+                "Loan Officer: {Loan officer's name} - {Loan officer's email address}",
+                "Loan Processor: {Loan processor's name} - {Loan processor's email address}",
+                'Thank you.',
+                '',
+                'Sincerely,'
+            ].join('\n')
+        },
+        escrow: {
+            key: 'lf_email_tpl_escrow',
+            onKey: 'lf_email_tpl_escrow_on',
+            titleKey: 'lf_email_tpl_escrow_title',
+            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan conditions that need your help.",
+            label: 'Customized escrow to-do email',
+            hint: 'Used when the template is condition_document and the email opens with "Dear Escrow".',
+            def: [
+                'Dear Escrow,',
+                'We would like to order some items for the below loan:',
+                '',
+                'Main borrower: {borrower(s)}',
+                "Subject property: {subject property address}",
+                'Loan number: {loan number}',
+                '',
+                '{list of to-do list item(s)}',
+                '',
+                "Loan Officer: {Loan officer's name} - {Loan officer's email address}",
+                "Loan Processor: {Loan processor's name} - {Loan processor's email address}",
+                '',
+                'Sincerely,'
+            ].join('\n')
+        }
+    };
+
+    // v100.9.55: templates are stored as HTML so formatting survives, and so that
+    // saving no longer round-trips through innerText - that round trip turned every
+    // block into an extra blank line, and the template grew every time it was saved.
+    function lfEtHtml(which) {
+        const v = localStorage.getItem(LF_ET[which].key);
+        if (v === null || v === '') return lfEtToHtml(LF_ET[which].def, false);
+        return /<[a-z][\s\S]*>/i.test(v) ? v : lfEtToHtml(v, false);   // plain text from an older version
+    }
+    function lfEtOn(which) { return localStorage.getItem(LF_ET[which].onKey) === 'true'; }
+    function lfEtTitle(which) {
+        const v = localStorage.getItem(LF_ET[which].titleKey);
+        return (v === null || v === '') ? LF_ET[which].defTitle : v;
+    }
+
+    const lfEtEscape = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // {placeholders} in bold, [text](url) as a link, blank lines kept
+    function lfEtToHtml(text, bold) {
+        return String(text).split('\n').map(line => {
+            if (!line.trim()) return '<div><br></div>';
+            let h = lfEtEscape(line);
+            h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+                '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            if (bold) h = h.replace(/\{([^}]+)\}/g, '<b class="lf-et-ph">{</b>$1<b class="lf-et-ph">}</b>');
+            return '<div>' + h + '</div>';
+        }).join('');
+    }
+
+    // ---------- reading the page so the placeholders can be filled ----------
+    // Reads the To field. Falls back to the address the body already quotes, then to
+    // any non-company address on the form - the borrower is never @loanfactory.com.
+    function lfEtBorrowerEmail(bodyText) {
+        const EMAIL = /[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi;
+        const pick = (list) => {
+            if (!list) return '';
+            const outside = list.filter(e => !/@loanfactory\.com$/i.test(e));
+            return (outside[0] || '').trim();
+        };
+
+        // the row whose label is exactly "To"
+        const labels = Array.from(document.querySelectorAll('label, th, td, div, span'))
+            .filter(el => el.offsetParent !== null && /^to$/i.test((el.textContent || '').trim()));
+        for (const l of labels) {
+            const row = l.closest('.form-group, .row, tr, li') || l.parentElement;
+            if (!row) continue;
+            const found = (row.innerText || '').match(EMAIL);
+            const hit = pick(found);
+            if (hit) return hit;
+        }
+
+        // the body may already quote it: "...your application 'someone@example.com'"
+        const quoted = (bodyText || '').match(/application\s*['"‘“]?\s*([\w.+-]+@[\w.-]+\.[a-z]{2,})/i);
+        if (quoted) return quoted[1];
+
+        // last resort - any outside address on the form
+        const all = (document.body.innerText || '').match(EMAIL);
+        return pick(all);
+    }
+
+    function lfEtPageFacts(editor) {
+        const facts = {};
+        const titleInput = Array.from(document.querySelectorAll('input')).find(i =>
+            /loan conditions|loan#/i.test(i.value || ''));
+        const title = titleInput ? titleInput.value : '';
+
+        // "Bryan Pastor - Loan# 3000371793 - 44852 CORTE RODRIGUEZ, TEMECULA, CA 92592 - ..."
+        const parts = title.split(' - ');
+        if (parts.length) facts.borrower = parts[0].trim();
+        const loanM = title.match(/loan#\s*([0-9]+)/i);
+        if (loanM) facts.loanNumber = loanM[1];
+        if (parts.length >= 3) facts.property = parts[2].trim();
+
+        const body = editor ? (editor.innerText || '') : '';
+        const lo = body.match(/Loan Officer:\s*([^\n-]+?)\s*-\s*([\w.+-]+@[\w.-]+)/i);
+        if (lo) { facts.loName = lo[1].trim(); facts.loEmail = lo[2].trim(); }
+        const lp = body.match(/Loan Processor:\s*([^\n-]+?)\s*-\s*([\w.+-]+@[\w.-]+)/i);
+        if (lp) { facts.lpName = lp[1].trim(); facts.lpEmail = lp[2].trim(); }
+        if (!facts.property) {
+            const sp = body.match(/Subject property:\s*([^\n]+)/i);
+            if (sp) facts.property = sp[1].trim();
+        }
+        if (!facts.loanNumber) {
+            const ln = body.match(/Loan number:\s*([0-9]+)/i);
+            if (ln) facts.loanNumber = ln[1];
+        }
+
+        // v100.9.56: the borrower's address is read from the To field itself. The old
+        // version grabbed the first chip-looking element on the page, which on this
+        // form is not the recipient - so the placeholder was left unfilled.
+        facts.borrowerEmail = lfEtBorrowerEmail(body);
+        return facts;
+    }
+
+    // the existing to-do list in the body, kept as-is
+    function lfEtExistingList(editor) {
+        if (!editor) return '';
+        const list = editor.querySelector('ol, ul');
+        return list ? list.outerHTML : '';
+    }
+
+    function lfEtFillMap(facts) {
+        return {
+            '{borrower(s)}': facts.borrower || '',
+            "{Borrower 1's email address}": facts.borrowerEmail || '',
+            "{Loan officer's name}": facts.loName || '',
+            "{Loan officer's email address}": facts.loEmail || '',
+            "{Loan processor's name}": facts.lpName || '',
+            "{Loan processor's email address}": facts.lpEmail || '',
+            '{subject property address}': facts.property || '',
+            '{Property address}': facts.property || '',
+            '{loan number}': facts.loanNumber || '',
+            '{Loan#}': facts.loanNumber || '',
+            "{borrower's name}": facts.borrower || ''
+        };
+    }
+
+    // Walks text nodes so bold, colour and size set in the editor are preserved.
+    function lfEtSubstitute(root, facts, listHtml) {
+        const map = lfEtFillMap(facts);
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        const texts = [];
+        while (walker.nextNode()) texts.push(walker.currentNode);
+        texts.forEach(node => {
+            let v = node.nodeValue;
+            if (v.indexOf('{') < 0) return;
+            Object.keys(map).forEach(k => { if (map[k]) v = v.split(k).join(map[k]); });
+            if (v !== node.nodeValue) node.nodeValue = v;
+        });
+
+        // the to-do list placeholder keeps the portal's own markup
+        if (listHtml) {
+            const all = Array.from(root.querySelectorAll('*'));
+            const holderEl = all.find(el => (el.textContent || '').trim() === '{list of to-do list item(s)}');
+            if (holderEl) {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = listHtml;
+                const listNode = tmp.firstElementChild;
+                if (listNode) (holderEl.closest('div, p') || holderEl).replaceWith(listNode);
+            }
+        }
+        return root;
+    }
+
+    // ---------- applying it ----------
+    function lfEtEditor() {
+        return Array.from(document.querySelectorAll('[contenteditable="true"], .note-editable'))
+            .find(e => e.offsetParent !== null && /dear\s/i.test(e.innerText || '')) || null;
+    }
+
+    // v100.9.54: the markers are found at ANY depth, not just among the editor's
+    // direct children. The portal wraps the body in nested blocks, which is why the
+    // first version reported "could not find the body" and did nothing.
+    function lfEtFindMarkers(editor) {
+        const blocks = Array.from(editor.querySelectorAll('div, p, span, td, h1, h2, h3, li'));
+        let startNode = null, endNode = null;
+        for (const b of blocks) {
+            const t = (b.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!t) continue;
+            if (!startNode && /^dear\b/i.test(t) && t.length < 160) startNode = b;
+            if (/^sincerely[,.]?$/i.test(t)) endNode = b;      // last one wins
+        }
+        if (!startNode || !endNode) return null;
+
+        // deepest node that still holds the whole marker text
+        const deepest = (node, rx) => {
+            let cur = node;
+            for (;;) {
+                const child = Array.from(cur.children).find(c => rx.test((c.textContent || '').replace(/\s+/g, ' ').trim()));
+                if (!child) return cur;
+                cur = child;
+            }
+        };
+        startNode = deepest(startNode, /^dear\b/i);
+        endNode = deepest(endNode, /^sincerely[,.]?$/i);
+
+        // the level both markers live on
+        let ca = startNode;
+        while (ca && !ca.contains(endNode)) ca = ca.parentElement;
+        if (!ca) return null;
+        if (ca === startNode) ca = startNode.parentElement;    // start wraps end - go up one
+        if (!ca) return null;
+
+        const kids = Array.from(ca.children);
+        const sIdx = kids.findIndex(k => k === startNode || k.contains(startNode));
+        const eIdx = kids.findIndex(k => k === endNode || k.contains(endNode));
+        if (sIdx < 0 || eIdx < 0 || eIdx < sIdx) return null;
+        return { container: ca, kids, sIdx, eIdx };
+    }
+
+    function lfEtApply(which, silent) {
+        const editor = lfEtEditor();
+        if (!editor) { if (!silent) showToast('Open the email first'); return false; }
+
+        const marks = lfEtFindMarkers(editor);
+        if (!marks) {
+            if (!silent) showToast('Could not read this email body \u2013 nothing was changed');
+            return false;
+        }
+
+        const facts = lfEtPageFacts(editor);
+        const listHtml = lfEtExistingList(editor);
+
+        const holder = document.createElement('div');
+        holder.innerHTML = lfEtHtml(which);
+        lfEtSubstitute(holder, facts, listHtml);
+        const fresh = Array.from(holder.childNodes);
+
+        const { container, kids, sIdx, eIdx } = marks;
+        const after = kids[eIdx + 1] || null;                  // what follows "Sincerely,"
+        for (let i = eIdx; i >= sIdx; i--) kids[i].remove();
+        fresh.forEach(n => container.insertBefore(n, after));
+
+        // v100.9.57: the subject line follows the same template. Done after the facts
+        // were read, because the existing title is where the loan number comes from.
+        try {
+            const tplTitle = lfEtTitle(which);
+            if (tplTitle) {
+                const map = lfEtFillMap(facts);
+                let t = tplTitle;
+                Object.keys(map).forEach(k => { if (map[k]) t = t.split(k).join(map[k]); });
+                const tInput = Array.from(document.querySelectorAll('input')).find(i =>
+                    /loan conditions|loan#/i.test(i.value || ''));
+                if (tInput && t.trim()) {
+                    tInput.value = t;
+                    tInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    tInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        } catch (e) {}
+
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        if (!silent) {
+            showToast('Applied customized ' + (which === 'escrow' ? 'escrow' : 'borrower') + ' to-do template');
+        }
+        return true;
+    }
+
+    // ---------- applied automatically on the Send To-do List page ----------
+    function lfEtTemplateName() {
+        const inp = Array.from(document.querySelectorAll('input')).find(i =>
+            (i.value || '').trim() === 'condition_document');
+        return inp ? 'condition_document' : '';
+    }
+
+    function lfEtGuessKind(editor) {
+        const t = editor ? (editor.innerText || '') : '';
+        return /dear\s+escrow/i.test(t) ? 'escrow' : 'borrower';
+    }
+
+    // v100.9.54: no button. When the template is condition_document and the matching
+    // switch is on, the body is rewritten once and a toast says so.
+    function lfEtInjectButton() {
+        if (lfEtTemplateName() !== 'condition_document') return;
+        const editor = lfEtEditor();
+        if (!editor || editor.dataset.lfEtDone === '1') return;
+
+        const kind = lfEtGuessKind(editor);
+        if (!lfEtOn(kind)) return;
+        if (!lfEtFindMarkers(editor)) return;                  // body not rendered yet - wait
+
+        editor.dataset.lfEtDone = '1';
+        if (lfEtApply(kind, true)) {
+            showToast('Applied customized ' + (kind === 'escrow' ? 'escrow' : 'borrower') + ' to-do template');
+        }
+    }
+
+    // ---------- the editor dialog ----------
+    function lfEtRgbToHex(v) {
+        if (!v) return '';
+        if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+        const m = String(v).match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+        if (!m) return '';
+        return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+    }
+
+    function lfEtOpenEditor(which) {
+        document.querySelectorAll('.lf-et-modal').forEach(m => m.remove());
+        const cfg = LF_ET[which];
+
+        // v100.9.55: a real editor. The buttons drive document.execCommand on the
+        // editable area, the same mechanism the portal's own editor uses, so what is
+        // saved is the HTML that will be dropped into the email.
+        // v100.9.58: laid out like the portal's own note editor - same groups, same
+        // order, and the same colour picker, so there is nothing new to learn.
+        const SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '24', '30', '36', '48', '60', '72', '96'];
+        const TOOLS = [
+            { cmd: 'bold',          html: '<b>B</b>',   title: 'Bold' },
+            { cmd: 'italic',        html: '<i>I</i>',   title: 'Italic' },
+            { cmd: 'underline',     html: '<u>U</u>',   title: 'Underline' },
+            { cmd: 'strikeThrough', html: '<s>S</s>',   title: 'Strikethrough' },
+            { sep: true },
+            { size: true },
+            { fore: true },
+            { back: true },
+            { cmd: 'removeFormat',  html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 20H7L3 16a2 2 0 0 1 0-3l7-7a2 2 0 0 1 3 0l6 6a2 2 0 0 1 0 3l-5 5"></path><line x1="18" y1="12" x2="9" y2="3"></line></svg>', title: 'Remove formatting' },
+            { sep: true },
+            { cmd: 'insertUnorderedList', html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3.5" cy="6" r="1.2" fill="currentColor"></circle><circle cx="3.5" cy="12" r="1.2" fill="currentColor"></circle><circle cx="3.5" cy="18" r="1.2" fill="currentColor"></circle></svg>', title: 'Unordered list' },
+            { cmd: 'insertOrderedList',   html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="9" y1="18" x2="21" y2="18"></line><text x="1" y="8" font-size="7" fill="currentColor" stroke="none">1</text><text x="1" y="14.5" font-size="7" fill="currentColor" stroke="none">2</text><text x="1" y="21" font-size="7" fill="currentColor" stroke="none">3</text></svg>', title: 'Ordered list' },
+            { sep: true },
+            { cmd: 'createLink',    html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"></path></svg>', title: 'Insert link' },
+            { sep: true },
+            { cmd: 'undo',          html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>', title: 'Undo' },
+            { cmd: 'redo',          html: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 14 20 9 15 4"></polyline><path d="M4 20v-7a4 4 0 0 1 4-4h12"></path></svg>', title: 'Redo' }
+        ];
+
+        const toolHtml = TOOLS.map(t => {
+            if (t.sep)  return '<span class="lf-et-sep"></span>';
+            if (t.size) return '<select class="lf-et-size" title="Font size">' +
+                               '<option value="">\u2014</option>' +
+                               SIZES.map(v => '<option value="' + v + '">' + v + '</option>').join('') +
+                               '</select>';
+            if (t.fore) return '<button type="button" class="lf-et-swatch" data-kind="fg" title="Foreground Color">' +
+                               '<span class="lf-et-sw-a">A</span><span class="lf-et-sw-bar" style="background:#212529"></span>' +
+                               '</button>';
+            if (t.back) return '<button type="button" class="lf-et-swatch" data-kind="bg" title="Background Color">' +
+                               '<span class="lf-et-sw-fill" style="background:#ffff00"></span>' +
+                               '</button>';
+            return '<button type="button" class="lf-et-tool" data-cmd="' + t.cmd + '" title="' + t.title + '">' + t.html + '</button>';
+        }).join('');
+
+        const wrap = document.createElement('div');
+        wrap.className = 'lf-et-modal';
+        wrap.innerHTML =
+            '<div class="lf-et-box">' +
+              '<div class="lf-et-head">' +
+                '<h4>' + cfg.label + '</h4>' +
+                '<button type="button" class="lf-et-reset" data-reset title="Restore the original wording and title">Reset</button>' +
+                '<span style="flex:1"></span>' +
+                '<button type="button" class="lf-et-x" data-close>&times;</button>' +
+              '</div>' +
+              '<div class="lf-et-note">' + cfg.hint + ' Anything in {braces} is filled in from the loan when the template is used.</div>' +
+              '<div class="lf-et-title-row">' +
+                '<label>Title</label>' +
+                '<input type="text" class="lf-et-title" spellcheck="false">' +
+              '</div>' +
+              '<div class="lf-et-tools">' + toolHtml + '</div>' +
+              '<div class="lf-et-body" contenteditable="true" spellcheck="false"></div>' +
+              '<div class="lf-et-foot">' +
+                '<span style="flex:1"></span>' +
+                '<button type="button" class="lf-btn-sm" data-cancel>Cancel</button>' +
+                '<button type="button" class="lf-btn-sm lf-btn-primary-sm" data-save>Save</button>' +
+              '</div>' +
+            '</div>';
+        document.body.appendChild(wrap);
+
+        const body = wrap.querySelector('.lf-et-body');
+        const titleInput = wrap.querySelector('.lf-et-title');
+        titleInput.value = lfEtTitle(which);
+        body.innerHTML = lfEtHtml(which);
+
+        // mark the placeholders so they stand out while editing, without storing the marker
+        const markPlaceholders = () => {
+            const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            nodes.forEach(n => {
+                if (!/\{[^}]+\}/.test(n.nodeValue)) return;
+                if (n.parentElement && n.parentElement.classList.contains('lf-et-ph')) return;
+                const frag = document.createDocumentFragment();
+                let last = 0;
+                // v100.9.57: only the braces are marked. The words between them keep
+                // the document's own formatting, so the template still reads as the
+                // sentence it will become.
+                n.nodeValue.replace(/\{[^}]+\}/g, (m, idx) => {
+                    if (idx > last) frag.appendChild(document.createTextNode(n.nodeValue.slice(last, idx)));
+                    const open = document.createElement('b');
+                    open.className = 'lf-et-ph';
+                    open.textContent = '{';
+                    frag.appendChild(open);
+                    frag.appendChild(document.createTextNode(m.slice(1, -1)));
+                    const close = document.createElement('b');
+                    close.className = 'lf-et-ph';
+                    close.textContent = '}';
+                    frag.appendChild(close);
+                    last = idx + m.length;
+                    return m;
+                });
+                if (last < n.nodeValue.length) frag.appendChild(document.createTextNode(n.nodeValue.slice(last)));
+                n.parentNode.replaceChild(frag, n);
+            });
+        };
+        markPlaceholders();
+        body.addEventListener('blur', markPlaceholders);
+
+        // v100.9.56: the toolbar follows the cursor. Without this the size box kept
+        // showing whatever was set last, so selecting smaller text still read 16px.
+        const syncToolbar = () => {
+            if (!document.activeElement || !body.contains(document.activeElement) &&
+                document.activeElement !== body) {
+                if (!body.contains(window.getSelection && window.getSelection().anchorNode)) return;
+            }
+            const state = (c) => { try { return document.queryCommandState(c); } catch (e) { return false; } };
+            wrap.querySelectorAll('.lf-et-tool[data-cmd]').forEach(b => {
+                const c = b.dataset.cmd;
+                if (['bold', 'italic', 'underline', 'strikeThrough', 'insertUnorderedList', 'insertOrderedList'].includes(c)) {
+                    b.classList.toggle('on', state(c));
+                }
+            });
+            // the real rendered size of whatever the cursor is in
+            let px = '';
+            try {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount) {
+                    let n = sel.anchorNode;
+                    if (n && n.nodeType === 3) n = n.parentElement;
+                    if (n && body.contains(n)) px = String(Math.round(parseFloat(getComputedStyle(n).fontSize)));
+                }
+            } catch (e) {}
+            sizeSel.value = (px && sizeSel.querySelector('option[value="' + px + '"]')) ? px : '';
+
+            let fg = '';
+            try { fg = document.queryCommandValue('foreColor'); } catch (e) {}
+            const hex = lfEtRgbToHex(fg);
+            if (hex && foreBtn) foreBtn.querySelector('.lf-et-sw-bar').style.background = hex;
+        };
+
+        const exec = (cmd, val) => {
+            body.focus();
+            try { document.execCommand(cmd, false, val === undefined ? null : val); } catch (e) {}
+            syncToolbar();
+        };
+        wrap.querySelectorAll('.lf-et-tool').forEach(b => {
+            b.addEventListener('mousedown', (e) => e.preventDefault());   // keep the selection
+            b.addEventListener('click', (e) => {
+                e.preventDefault();
+                const cmd = b.dataset.cmd;
+                if (cmd === 'createLink') {
+                    const url = prompt('Link address:', 'https://www.loanfactory.com/login');
+                    if (url) exec('createLink', url);
+                    return;
+                }
+                exec(cmd);
+            });
+        });
+        const sizeSel = wrap.querySelector('.lf-et-size');
+        sizeSel.addEventListener('mousedown', () => body.focus());
+        sizeSel.addEventListener('change', () => {
+            if (!sizeSel.value) return;
+            // execCommand only knows 1-7, so the point size is applied to the elements
+            // it produces - the same trick the portal's own editor uses.
+            body.focus();
+            try {
+                document.execCommand('fontSize', false, '7');
+                body.querySelectorAll('font[size="7"]').forEach(f => {
+                    const sp = document.createElement('span');
+                    sp.style.fontSize = sizeSel.value + 'px';
+                    while (f.firstChild) sp.appendChild(f.firstChild);
+                    f.replaceWith(sp);
+                });
+            } catch (e) {}
+            syncToolbar();
+        });
+
+        // the portal's own colour picker, reused
+        const foreBtn = wrap.querySelector('.lf-et-swatch[data-kind="fg"]');
+        const backBtn = wrap.querySelector('.lf-et-swatch[data-kind="bg"]');
+        let lastFore = '#212529', lastBack = '#ffff00';
+
+        const applyFore = (val) => {
+            lastFore = val || '#212529';
+            foreBtn.querySelector('.lf-et-sw-bar').style.background = lastFore;
+            exec('foreColor', lastFore);
+        };
+        const applyBack = (val) => {
+            lastBack = val || '';
+            backBtn.querySelector('.lf-et-sw-fill').style.background = lastBack || 'transparent';
+            exec(val ? 'hiliteColor' : 'removeFormat', val || undefined);
+        };
+
+        [foreBtn, backBtn].forEach(btn => {
+            btn.addEventListener('mousedown', (e) => e.preventDefault());
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const isBg = btn.dataset.kind === 'bg';
+                lfDtOpenPalette(btn, isBg ? 'bg' : 'fg', isBg ? lastBack : lastFore,
+                    (val) => { isBg ? applyBack(val) : applyFore(val); },
+                    wrap.querySelector('.lf-et-box'));
+            });
+        });
+
+        ['keyup', 'mouseup', 'input', 'focus'].forEach(ev => body.addEventListener(ev, syncToolbar));
+        const onSelChange = () => { if (document.activeElement === body) syncToolbar(); };
+        document.addEventListener('selectionchange', onSelChange);
+        syncToolbar();
+
+        const close = () => {
+            document.removeEventListener('selectionchange', onSelChange);
+            wrap.remove();
+        };
+        wrap.querySelector('[data-close]').onclick = close;
+        wrap.querySelector('[data-cancel]').onclick = close;
+        wrap.querySelector('[data-reset]').onclick = () => {
+            body.innerHTML = lfEtToHtml(cfg.def, true);
+            titleInput.value = cfg.defTitle;
+            markPlaceholders();
+            showToast('Reset to the original');
+        };
+        wrap.querySelector('[data-save]').onclick = () => {
+            // strip the editing-only placeholder marker, keep everything else
+            const clone = body.cloneNode(true);
+            clone.querySelectorAll('b.lf-et-ph').forEach(b => {
+                b.replaceWith(document.createTextNode(b.textContent));
+            });
+            localStorage.setItem(cfg.key, clone.innerHTML);
+            localStorage.setItem(cfg.titleKey, titleInput.value.trim());
+            showToast('Template saved');
+            close();
+        };
+        wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
     }
 
     // ==========================================
@@ -3806,7 +4517,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.51</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.58</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -3912,6 +4623,32 @@
                                 <span class="lf-slider"></span>
                             </div>
                         </label>
+                    </div>
+
+                    <div class="lf-settings-card">
+                        <h4 class="lf-settings-title">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            To-do Email Templates
+                        </h4>
+                        <label class="lf-switch-wrapper">
+                            <span class="lf-switch-label">Customized borrower to-do email</span>
+                            <div class="lf-switch">
+                                <input type="checkbox" id="lf-et-borrower-toggle" ${localStorage.getItem('lf_email_tpl_borrower_on') === 'true' ? 'checked' : ''}>
+                                <span class="lf-slider"></span>
+                            </div>
+                        </label>
+                        <button type="button" class="lf-theme-btn" id="lf-et-borrower-edit" style="width:100%; padding:7px 10px; margin-bottom:10px;">Edit borrower email</button>
+
+                        <label class="lf-switch-wrapper">
+                            <span class="lf-switch-label">Customized escrow to-do email</span>
+                            <div class="lf-switch">
+                                <input type="checkbox" id="lf-et-escrow-toggle" ${localStorage.getItem('lf_email_tpl_escrow_on') === 'true' ? 'checked' : ''}>
+                                <span class="lf-slider"></span>
+                            </div>
+                        </label>
+                        <button type="button" class="lf-theme-btn" id="lf-et-escrow-edit" style="width:100%; padding:7px 10px;">Edit escrow email</button>
+
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Applies on the Send To-do List page when the template is <b>condition_document</b>. Only the body between "Dear" and "Sincerely," is replaced \u2013 the logo and signature stay as they are.</div>
                     </div>
 
                     <div class="lf-settings-card">
@@ -4318,6 +5055,27 @@
                 dtPaint();
             });
         }
+
+        // v100.9.52: to-do email templates
+        const etBorrowerToggle = document.getElementById('lf-et-borrower-toggle');
+        if (etBorrowerToggle) {
+            etBorrowerToggle.addEventListener('change', (e) => {
+                localStorage.setItem('lf_email_tpl_borrower_on', e.target.checked);
+                showToast(e.target.checked ? 'Borrower template will be applied automatically' : 'Borrower template off');
+            });
+        }
+        const etEscrowToggle = document.getElementById('lf-et-escrow-toggle');
+        if (etEscrowToggle) {
+            etEscrowToggle.addEventListener('change', (e) => {
+                localStorage.setItem('lf_email_tpl_escrow_on', e.target.checked);
+                showToast(e.target.checked ? 'Escrow template will be applied automatically' : 'Escrow template off');
+            });
+        }
+        const etBorrowerEdit = document.getElementById('lf-et-borrower-edit');
+        if (etBorrowerEdit) etBorrowerEdit.addEventListener('click', (e) => { e.preventDefault(); lfEtOpenEditor('borrower'); });
+        const etEscrowEdit = document.getElementById('lf-et-escrow-edit');
+        if (etEscrowEdit) etEscrowEdit.addEventListener('click', (e) => { e.preventDefault(); lfEtOpenEditor('escrow'); });
+
 
         // v100.9.21: System warning notice - applies immediately
         const warnToggle = document.getElementById('lf-warn-notice-toggle');
@@ -4964,8 +5722,8 @@
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
             try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
-            try { lfSizeTodoDropZones(); } catch (err) {}            // v100.9.38
             try { lfGsSync(); } catch (err) {}                       // v100.9.42
+            try { lfEtInjectButton(); } catch (err) {}               // v100.9.52
 
             // 1.0 Escalation desk copy buttons: borrower name + loan number (v100.8.85)
             try { lfEscInjectCopyButtons(); } catch (err) {}
