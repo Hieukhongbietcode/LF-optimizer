@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.69
+// @version      100.9.72
 // @description  Update Sept 21st, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.69 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.72 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3852,7 +3852,7 @@
             key: 'lf_email_tpl_borrower',
             onKey: 'lf_email_tpl_borrower_on',
             titleKey: 'lf_email_tpl_borrower_title',
-            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan conditions that need your help.",
+            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan Conditions that need your help",
             label: 'Customized borrower to-do email',
             hint: 'Used when the template is condition_document and the email is addressed to the borrower.',
             def: [
@@ -3875,7 +3875,7 @@
             key: 'lf_email_tpl_escrow',
             onKey: 'lf_email_tpl_escrow_on',
             titleKey: 'lf_email_tpl_escrow_title',
-            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan conditions that need your help.",
+            defTitle: "{borrower's name} - Loan# {Loan#} - {Property address} - Loan Conditions that need your help",
             label: 'Customized escrow to-do email',
             hint: 'Used when the template is condition_document and the email opens with "Dear Escrow".',
             def: [
@@ -4003,6 +4003,62 @@
         return out;
     }
 
+    // v100.9.71: the To field is read as name/address pairs, so the greeting can name
+    // everyone it is addressed to and the "your application" line can point at the
+    // main borrower rather than whoever happened to be listed first.
+    function lfEtToRecipients() {
+        const labels = Array.from(document.querySelectorAll('label, th, td, div, span'))
+            .filter(el => el.offsetParent !== null && /^to$/i.test((el.textContent || '').trim()));
+
+        const EM = /<\s*([\w.+-]+@[\w.-]+\.[a-z]{2,})\s*>/i;
+        const clean = (t) => String(t || '')
+            .replace(/[\u00d7\u2715\u2716x]\s*/, '')     // the chip's remove glyph
+            .replace(EM, '')
+            .replace(/\s+/g, ' ')
+            .replace(/^[,;\s]+|[,;\s]+$/g, '')
+            .trim();
+
+        for (const l of labels) {
+            const row = l.closest('.form-group, .row, tr, li') || l.parentElement;
+            if (!row) continue;
+
+            // v100.9.71: each recipient is read from its own chip. Parsing the row as
+            // one string split names on commas, so "Robert J Alvarado, Jr." arrived as
+            // "Jr." - the suffix, not the person.
+            const chips = Array.from(row.querySelectorAll('*'))
+                .filter(el => EM.test(el.textContent || '') &&
+                              !Array.from(el.children).some(c => EM.test(c.textContent || '')));
+            const out = [];
+            chips.forEach(ch => {
+                const raw = ch.textContent || '';
+                const m = raw.match(EM);
+                if (!m) return;
+                const name = clean(raw);
+                if (!out.some(o => o.email === m[1])) out.push({ name: name, email: m[1] });
+            });
+            if (out.length) return out;
+        }
+        return [];
+    }
+
+    const lfEtFirstName = (full) => String(full || '').trim().split(/\s+/)[0] || '';
+
+    // "Robert", "Robert and Olga", "Robert, Olga and Erica"
+    function lfEtJoinNames(names) {
+        // v100.9.72: two people on the loan can share a first name - "Robert, Olga,
+        // Erica and Robert" reads like a mistake, so repeats are dropped.
+        const seen = new Set();
+        const list = names.filter(n => {
+            if (!n) return false;
+            const k = n.toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+        if (list.length <= 1) return list[0] || '';
+        return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+    }
+
     function lfEtPageFacts(editor) {
         const facts = {};
         const titleInput = Array.from(document.querySelectorAll('input')).find(i =>
@@ -4033,7 +4089,41 @@
         // v100.9.56: the borrower's address is read from the To field itself. The old
         // version grabbed the first chip-looking element on the page, which on this
         // form is not the recipient - so the placeholder was left unfilled.
-        facts.borrowerEmail = lfEtBorrowerEmail(body);
+        // v100.9.71: everyone the email is addressed to
+        const recips = lfEtToRecipients();
+        facts.recipients = recips;
+        facts.borrowerNames = lfEtJoinNames(recips.map(r => lfEtFirstName(r.name)));
+
+        // the main borrower is the recipient whose name matches the one in the title;
+        // only when that fails does it fall back to the first outside address
+        let mainEmail = '';
+        const norm = (t) => String(t || '').toLowerCase()
+            .replace(/[.,]/g, ' ').replace(/\b(jr|sr|ii|iii|iv)\b/g, ' ')
+            .replace(/\s+/g, ' ').trim();
+        const titleName = norm(facts.borrower);
+        if (titleName && recips.length) {
+            // v100.9.72: the whole name is matched first. Scoring word by word made
+            // "Robert Alvarado" and "Robert J Alvarado, Jr." tie, and the wrong one
+            // won simply by being listed first.
+            let hit = recips.find(r => norm(r.name) === titleName)
+                   || recips.find(r => norm(r.name).startsWith(titleName))
+                   || recips.find(r => titleName.startsWith(norm(r.name)));
+            if (!hit) {
+                const parts = titleName.split(' ').filter(w => w.length > 2);
+                let best = null, bestScore = 0;
+                recips.forEach(r => {
+                    const n = norm(r.name);
+                    const score = parts.reduce((acc, w) => acc + (n.includes(w) ? 1 : 0), 0);
+                    // a longer matching name is the more specific one
+                    if (score > bestScore || (score === bestScore && best && n.length > norm(best.name).length)) {
+                        bestScore = score; best = r;
+                    }
+                });
+                if (best && bestScore > 0) hit = best;
+            }
+            if (hit) mainEmail = hit.email;
+        }
+        facts.borrowerEmail = mainEmail || lfEtBorrowerEmail(body);
 
         // v100.9.60: everything the escrow email needs
         const blk = lfEtParseLoanBlock(body);
@@ -4095,7 +4185,7 @@
 
     function lfEtFillMap(facts) {
         return {
-            '{borrower(s)}': facts.borrower || '',
+            '{borrower(s)}': facts.borrowerNames || facts.borrower || '',
             "{Borrower 1's email address}": facts.borrowerEmail || '',
             "{Loan officer's name}": facts.loName || '',
             "{Loan officer's email address}": facts.loEmail || '',
@@ -4168,9 +4258,9 @@
                 tmp.innerHTML = listHtml;
                 const listNode = tmp.firstElementChild;
                 if (listNode) target.replaceWith(listNode);
-            } else {
-                target.remove();   // nothing to put there - do not leave the raw placeholder
             }
+            // nothing to remove here: lfEtApply refuses to run without a list, so the
+            // placeholder can never be left dangling or silently deleted
         }
         return root;
     }
@@ -4184,13 +4274,18 @@
     // v100.9.54: the markers are found at ANY depth, not just among the editor's
     // direct children. The portal wraps the body in nested blocks, which is why the
     // first version reported "could not find the body" and did nothing.
+    // v100.9.70: the opening line is not always "Dear". A template that greets with
+    // "Hi" made the markers unfindable, so the whole feature quietly did nothing on
+    // any email that had already been through it once.
+    const LF_ET_GREETING = /^(dear|hi|hello|good\s+(morning|afternoon|evening))\b/i;
+
     function lfEtFindMarkers(editor) {
         const blocks = Array.from(editor.querySelectorAll('div, p, span, td, h1, h2, h3, li'));
         let startNode = null, endNode = null;
         for (const b of blocks) {
             const t = (b.textContent || '').replace(/\s+/g, ' ').trim();
             if (!t) continue;
-            if (!startNode && /^dear\b/i.test(t) && t.length < 160) startNode = b;
+            if (!startNode && LF_ET_GREETING.test(t) && t.length < 160) startNode = b;
             if (/^sincerely[,.]?$/i.test(t)) endNode = b;      // last one wins
         }
         if (!startNode || !endNode) return null;
@@ -4204,7 +4299,7 @@
                 cur = child;
             }
         };
-        startNode = deepest(startNode, /^dear\b/i);
+        startNode = deepest(startNode, LF_ET_GREETING);
         endNode = deepest(endNode, /^sincerely[,.]?$/i);
 
         // the level both markers live on
@@ -4233,6 +4328,17 @@
 
         const facts = lfEtPageFacts(editor);
         const listHtml = lfEtExistingList(editor, marks);
+
+        // v100.9.70: if the template asks for the to-do list but none can be read from
+        // the email, stop. The old behaviour removed the placeholder line, which sent
+        // the email out with the list of required documents missing entirely - the one
+        // thing it exists to carry.
+        const wantsList = /\{list of to-do list item\(s\)\}/.test(lfEtHtml(which));
+        if (wantsList && !listHtml) {
+            console.warn('[LF Optimizer] template not applied: the to-do list could not be read from this email.');
+            showToast('To-do list not found \u2013 email left unchanged');
+            return false;
+        }
 
         const holder = document.createElement('div');
         holder.innerHTML = lfEtHtml(which);
@@ -4792,7 +4898,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.69</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.72</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
