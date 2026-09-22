@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.72
-// @description  Update Sept 21st, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.74
+// @description  Update Sept 22nd, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.72 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.74 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -4007,33 +4007,43 @@
     // everyone it is addressed to and the "your application" line can point at the
     // main borrower rather than whoever happened to be listed first.
     function lfEtToRecipients() {
-        const labels = Array.from(document.querySelectorAll('label, th, td, div, span'))
-            .filter(el => el.offsetParent !== null && /^to$/i.test((el.textContent || '').trim()));
-
         const EM = /<\s*([\w.+-]+@[\w.-]+\.[a-z]{2,})\s*>/i;
         const clean = (t) => String(t || '')
-            .replace(/[\u00d7\u2715\u2716x]\s*/, '')     // the chip's remove glyph
+            .replace(/[\u00d7\u2715\u2716]\s*/, '')
             .replace(EM, '')
             .replace(/\s+/g, ' ')
             .replace(/^[,;\s]+|[,;\s]+$/g, '')
             .trim();
 
-        for (const l of labels) {
-            const row = l.closest('.form-group, .row, tr, li') || l.parentElement;
-            if (!row) continue;
+        // v100.9.74: the field container is found by stepping FORWARD from the "To"
+        // label, not by climbing to a shared ancestor. Climbing reached a wrapper that
+        // held To and Cc together, so everyone copied on the email was greeted by name.
+        const labels = Array.from(document.querySelectorAll('label, th, td, div, span'))
+            .filter(el => el.offsetParent !== null && /^to:?$/i.test((el.textContent || '').trim()));
 
-            // v100.9.71: each recipient is read from its own chip. Parsing the row as
-            // one string split names on commas, so "Robert J Alvarado, Jr." arrived as
-            // "Jr." - the suffix, not the person.
-            const chips = Array.from(row.querySelectorAll('*'))
+        for (const label of labels) {
+            let node = label, field = null;
+            for (let up = 0; up < 3 && node && !field; up++) {
+                let sib = node.nextElementSibling;
+                while (sib && !field) {
+                    if (EM.test(sib.textContent || '')) field = sib;
+                    sib = sib.nextElementSibling;
+                }
+                node = node.parentElement;
+            }
+            if (!field) continue;
+            // a container that also holds the Cc row is the wrong one
+            if (/\bcc\b/i.test((field.textContent || '').slice(0, 400)) &&
+                field.querySelectorAll('input, select').length > 2) continue;
+
+            const chips = Array.from(field.querySelectorAll('*'))
                 .filter(el => EM.test(el.textContent || '') &&
                               !Array.from(el.children).some(c => EM.test(c.textContent || '')));
             const out = [];
             chips.forEach(ch => {
-                const raw = ch.textContent || '';
-                const m = raw.match(EM);
+                const m = (ch.textContent || '').match(EM);
                 if (!m) return;
-                const name = clean(raw);
+                const name = clean(ch.textContent);
                 if (!out.some(o => o.email === m[1])) out.push({ name: name, email: m[1] });
             });
             if (out.length) return out;
@@ -4333,7 +4343,12 @@
         // the email, stop. The old behaviour removed the placeholder line, which sent
         // the email out with the list of required documents missing entirely - the one
         // thing it exists to carry.
-        const wantsList = /\{list of to-do list item\(s\)\}/.test(lfEtHtml(which));
+        // v100.9.74: tested against the rendered text. The saved template can hold the
+        // braces in separate elements, so the raw HTML never matched and the check that
+        // was meant to protect the list never fired.
+        const tplProbe = document.createElement('div');
+        tplProbe.innerHTML = lfEtHtml(which);
+        const wantsList = /\{list of to-do list item\(s\)\}/.test((tplProbe.textContent || '').replace(/\s+/g, ' '));
         if (wantsList && !listHtml) {
             console.warn('[LF Optimizer] template not applied: the to-do list could not be read from this email.');
             showToast('To-do list not found \u2013 email left unchanged');
@@ -4396,7 +4411,16 @@
 
         const kind = lfEtGuessKind(editor);
         if (!lfEtOn(kind)) return;
-        if (!lfEtFindMarkers(editor)) return;                  // body not rendered yet - wait
+        const marks = lfEtFindMarkers(editor);
+        if (!marks) return;                                    // body not rendered yet - wait
+
+        // v100.9.74: the portal writes the greeting and signature first and fills the
+        // to-do list in afterwards. Applying as soon as the markers existed caught the
+        // email mid-build, so the list was not there to carry over. Wait for it.
+        const probe = document.createElement('div');
+        probe.innerHTML = lfEtHtml(kind);
+        const needsList = /\{list of to-do list item\(s\)\}/.test((probe.textContent || '').replace(/\s+/g, ' '));
+        if (needsList && !lfEtExistingList(editor, marks)) return;
 
         editor.dataset.lfEtDone = '1';
         if (lfEtApply(kind, true)) {
@@ -4714,6 +4738,65 @@
     }
 
     // ==========================================
+    // LOAN OWNERS TAB: DEFAULT THE OWNER TO "ALL" (v100.9.73)
+    //
+    // Opening the Loan owners tab filters the to-dos down to whoever is signed in, so
+    // the other owners' items are hidden until the filter is changed by hand. This
+    // switches it to "All" once, the first time that tab is opened.
+    //
+    // Once only: after that the choice belongs to the user, so picking a specific
+    // owner sticks. Leaving the tab and coming back counts as opening it again.
+    // The Borrower and Closing agent tabs are not touched.
+    // ==========================================
+    let lfOwnerTabWasActive = false;
+
+    function lfLoanOwnerTabActive() {
+        const tabs = Array.from(document.querySelectorAll('a, button, li, [role="tab"], .nav-link'));
+        const tab = tabs.find(t => {
+            const txt = (t.textContent || '').replace(/\s+/g, ' ').trim();
+            return /^loan owners?\s*\(\d+\)$/i.test(txt) || /^loan owners?$/i.test(txt);
+        });
+        if (!tab || !tab.offsetParent) return null;
+        const el = tab.closest('li, [role="tab"]') || tab;
+        const cls = (el.className || '') + ' ' + (tab.className || '');
+        const on = /\bactive\b|\bselected\b/i.test(cls) ||
+                   el.getAttribute('aria-selected') === 'true' ||
+                   tab.getAttribute('aria-selected') === 'true';
+        return on ? tab : null;
+    }
+
+    // The owner filter is the select next to the "Loan owner" label
+    function lfLoanOwnerSelect() {
+        for (const lb of document.querySelectorAll('label, td, th, div, span')) {
+            if (!lb.offsetParent) continue;
+            if (!/^loan owner:?$/i.test((lb.textContent || '').replace(/\s+/g, ' ').trim())) continue;
+            const row = lb.closest('.form-group, .row, tr, li') || lb.parentElement;
+            const sel = row ? row.querySelector('select') : null;
+            if (sel && sel.offsetParent) return sel;
+        }
+        return null;
+    }
+
+    function lfApplyAllLoanOwners() {
+        const active = lfLoanOwnerTabActive();
+        if (!active) { lfOwnerTabWasActive = false; return; }   // tab left - arm it again
+        if (lfOwnerTabWasActive) return;                        // already handled this visit
+
+        const sel = lfLoanOwnerSelect();
+        if (!sel || !sel.options || !sel.options.length) return;   // not rendered yet
+
+        lfOwnerTabWasActive = true;
+
+        const allOpt = Array.from(sel.options).find(o =>
+            /^all$/i.test((o.textContent || '').trim()) || /^all$/i.test((o.value || '').trim()));
+        if (!allOpt) return;
+        if (sel.value === allOpt.value) return;                 // already on All
+
+        sel.value = allOpt.value;
+        ['input', 'change'].forEach(ev => sel.dispatchEvent(new Event(ev, { bubbles: true })));
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
@@ -4898,7 +4981,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.72</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.74</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -6107,6 +6190,7 @@
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
             try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
+            try { lfApplyAllLoanOwners(); } catch (err) {}           // v100.9.73
             try { lfGsSync(); } catch (err) {}                       // v100.9.42
             try { lfEtInjectButton(); } catch (err) {}               // v100.9.52
 
