@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.74
+// @version      100.9.76
 // @description  Update Sept 22nd, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.74 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.76 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -4015,40 +4015,36 @@
             .replace(/^[,;\s]+|[,;\s]+$/g, '')
             .trim();
 
-        // v100.9.74: the field container is found by stepping FORWARD from the "To"
-        // label, not by climbing to a shared ancestor. Climbing reached a wrapper that
-        // held To and Cc together, so everyone copied on the email was greeted by name.
-        const labels = Array.from(document.querySelectorAll('label, th, td, div, span'))
-            .filter(el => el.offsetParent !== null && /^to:?$/i.test((el.textContent || '').trim()));
+        // v100.9.76: found by walking the document IN ORDER from the "To" label to the
+        // first recipient chip, then taking only that chip's own siblings. Earlier
+        // versions looked at ancestors, which on this form reach a wrapper holding To,
+        // Cc and the suggestion list together - so everyone copied on the email, and
+        // names from the dropdown, ended up in the greeting.
+        const all = Array.from(document.querySelectorAll('*'));
+        const labelIdx = all.findIndex(el =>
+            el.offsetParent !== null && /^to:?$/i.test((el.textContent || '').trim()));
+        if (labelIdx < 0) return [];
 
-        for (const label of labels) {
-            let node = label, field = null;
-            for (let up = 0; up < 3 && node && !field; up++) {
-                let sib = node.nextElementSibling;
-                while (sib && !field) {
-                    if (EM.test(sib.textContent || '')) field = sib;
-                    sib = sib.nextElementSibling;
-                }
-                node = node.parentElement;
-            }
-            if (!field) continue;
-            // a container that also holds the Cc row is the wrong one
-            if (/\bcc\b/i.test((field.textContent || '').slice(0, 400)) &&
-                field.querySelectorAll('input, select').length > 2) continue;
+        const isChip = (el) => EM.test(el.textContent || '') &&
+                               !Array.from(el.children).some(c => EM.test(c.textContent || '')) &&
+                               el.tagName !== 'OPTION' && !el.closest('select');
 
-            const chips = Array.from(field.querySelectorAll('*'))
-                .filter(el => EM.test(el.textContent || '') &&
-                              !Array.from(el.children).some(c => EM.test(c.textContent || '')));
-            const out = [];
-            chips.forEach(ch => {
-                const m = (ch.textContent || '').match(EM);
-                if (!m) return;
-                const name = clean(ch.textContent);
-                if (!out.some(o => o.email === m[1])) out.push({ name: name, email: m[1] });
-            });
-            if (out.length) return out;
+        let firstChip = null;
+        for (let i = labelIdx + 1; i < all.length && !firstChip; i++) {
+            if (isChip(all[i])) firstChip = all[i];
         }
-        return [];
+        if (!firstChip || !firstChip.parentElement) return [];
+
+        const out = [];
+        Array.from(firstChip.parentElement.children).forEach(ch => {
+            if (!isChip(ch)) return;
+            const m = (ch.textContent || '').match(EM);
+            if (!m) return;
+            const name = clean(ch.textContent);
+            if (!out.some(o => o.email === m[1])) out.push({ name: name, email: m[1] });
+        });
+        return out.length ? out : [{ name: clean(firstChip.textContent),
+                                     email: (firstChip.textContent.match(EM) || [])[1] || '' }];
     }
 
     const lfEtFirstName = (full) => String(full || '').trim().split(/\s+/)[0] || '';
@@ -4078,7 +4074,8 @@
         // "Bryan Pastor - Loan# 3000371793 - 44852 CORTE RODRIGUEZ, TEMECULA, CA 92592 - ..."
         const parts = title.split(' - ');
         if (parts.length) facts.borrower = parts[0].trim();
-        const loanM = title.match(/loan#\s*([0-9]+)/i);
+        // v100.9.76: loan numbers are not always digits - LU252293 was left unfilled
+        const loanM = title.match(/loan#\s*([A-Za-z0-9-]+)/i);
         if (loanM) facts.loanNumber = loanM[1];
         if (parts.length >= 3) facts.property = parts[2].trim();
 
@@ -4218,6 +4215,51 @@
     }
 
     // Walks text nodes so bold, colour and size set in the editor are preserved.
+    // v100.9.76: placeholders are swapped at the text node that holds them, so the
+    // surrounding wrapper - whatever shape the editor saved it in - is left alone.
+    // Matching whole elements kept failing: one shape deleted the neighbouring lines,
+    // another matched nothing at all and left the raw {placeholder} in the email.
+    function lfEtSwapPlaceholder(root, placeholder, buildNodes) {
+        // v100.9.76b: the editor stores "{name}" with each brace in its own <b>, which
+        // splits the text across three nodes so nothing ever matched - this is why the
+        // to-do list placeholder kept coming out as literal text in the sent email.
+        // Brace-only inline wrappers are unwrapped first; everything else keeps its
+        // formatting.
+        Array.from(root.querySelectorAll('b, i, u, s, span, strong, em, font')).forEach(el => {
+            const t = (el.textContent || '').trim();
+            if (t !== '{' && t !== '}' && !/^\{[^}]*$/.test(t) && !/^[^{]*\}$/.test(t)) return;
+            if (el.children.length) return;
+            el.replaceWith(document.createTextNode(el.textContent));
+        });
+        root.normalize();
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        const hits = [];
+        while (walker.nextNode()) {
+            if ((walker.currentNode.nodeValue || '').indexOf(placeholder) >= 0) hits.push(walker.currentNode);
+        }
+        if (!hits.length) return false;
+
+        hits.forEach(tn => {
+            const val = tn.nodeValue;
+            const i = val.indexOf(placeholder);
+            const frag = document.createDocumentFragment();
+            if (i > 0) frag.appendChild(document.createTextNode(val.slice(0, i)));
+            buildNodes().forEach(n => frag.appendChild(n));
+            const rest = val.slice(i + placeholder.length);
+            if (rest) frag.appendChild(document.createTextNode(rest));
+
+            // a block element cannot live inside an inline wrapper - lift it out
+            let host = tn.parentNode;
+            if (host && /^(B|I|U|S|SPAN|EM|STRONG|FONT)$/.test(host.tagName) &&
+                (host.textContent || '').trim() === placeholder) {
+                host.parentNode.replaceChild(frag, host);
+            } else {
+                tn.parentNode.replaceChild(frag, tn);
+            }
+        });
+        return true;
+    }
+
     function lfEtSubstitute(root, facts, listHtml) {
         const map = lfEtFillMap(facts);
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
@@ -4232,46 +4274,28 @@
 
         // v100.9.60: {co-borrowers} becomes one block per co-borrower, or disappears
         // when the loan has none.
-        const coEl = Array.from(root.querySelectorAll('*'))
-            .find(el => (el.textContent || '').replace(/\s+/g, ' ').trim() === '{co-borrowers}');
-        if (coEl) {
-            const target = coEl.closest('div, p') || coEl;
+        lfEtSwapPlaceholder(root, '{co-borrowers}', () => {
             const list = facts.coBorrowers || [];
-            if (list.length) {
-                // whatever indent the {co-borrowers} line carries is passed on to each
-                // block, so the expansion lines up with the rest of the details
-                const indent = (target.getAttribute && target.getAttribute('style')) || '';
-                const frag = document.createDocumentFragment();
-                list.forEach(c => {
-                    [['Co-borrower', c.name], ['Phone number', c.phone], ['DOB', c.dob], ['Email address', c.email]]
-                        .forEach(([k, v]) => {
-                            if (!v) return;
-                            const d = document.createElement('div');
-                            if (indent) d.setAttribute('style', indent);
-                            d.textContent = k + ': ' + v;
-                            frag.appendChild(d);
-                        });
-                });
-                target.replaceWith(frag);
-            } else {
-                target.remove();
-            }
-        }
+            return list.length ? list.reduce((acc, c) => {
+                [['Co-borrower', c.name], ['Phone number', c.phone], ['DOB', c.dob], ['Email address', c.email]]
+                    .forEach(([k, v]) => {
+                        if (!v) return;
+                        const d = document.createElement('div');
+                        d.textContent = k + ': ' + v;
+                        acc.push(d);
+                    });
+                return acc;
+            }, []) : [];
+        });
 
-        // the to-do list placeholder keeps the portal's own markup
-        const all = Array.from(root.querySelectorAll('*'));
-        const holderEl = all.find(el => (el.textContent || '').replace(/\s+/g, ' ').trim() === '{list of to-do list item(s)}');
-        if (holderEl) {
-            const target = holderEl.closest('div, p') || holderEl;
-            if (listHtml) {
-                const tmp = document.createElement('div');
-                tmp.innerHTML = listHtml;
-                const listNode = tmp.firstElementChild;
-                if (listNode) target.replaceWith(listNode);
-            }
-            // nothing to remove here: lfEtApply refuses to run without a list, so the
-            // placeholder can never be left dangling or silently deleted
-        }
+        // the to-do list keeps the portal's own markup, exactly as generated
+        lfEtSwapPlaceholder(root, '{list of to-do list item(s)}', () => {
+            if (!listHtml) return [];
+            const tmp = document.createElement('div');
+            tmp.innerHTML = listHtml;
+            return Array.from(tmp.childNodes);
+        });
+
         return root;
     }
 
@@ -4375,7 +4399,11 @@
                 Object.keys(map).forEach(k => { if (map[k]) t = t.split(k).join(map[k]); });
                 const tInput = Array.from(document.querySelectorAll('input')).find(i =>
                     /loan conditions|loan#/i.test(i.value || ''));
-                if (tInput && t.trim()) {
+                // v100.9.76: never write a title that still holds an unfilled
+                // placeholder, and never append to one this script already wrote -
+                // that is how "... help - Loan conditions that need your help." grew.
+                const unresolved = /\{[^}]+\}/.test(t);
+                if (tInput && t.trim() && !unresolved && tInput.value.trim() !== t.trim()) {
                     tInput.value = t;
                     tInput.dispatchEvent(new Event('input', { bubbles: true }));
                     tInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -4981,7 +5009,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.74</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.76</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
