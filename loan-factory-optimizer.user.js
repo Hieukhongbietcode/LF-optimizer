@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.76
+// @version      100.9.83
 // @description  Update Sept 22nd, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.76 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.83 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -2569,15 +2569,31 @@
             .lf-et-tool.on { background: #fff; color: #007aff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
             .lf-et-sep { width: 1px; height: 18px; background: rgba(0,0,0,.1); margin: 0 5px; }
 
+            .lf-et-sizewrap { position: relative; display: inline-flex; }
             .lf-et-size {
-                height: 28px; min-width: 58px; padding: 0 6px;
+                display: inline-flex; align-items: center; gap: 4px;
+                height: 28px; min-width: 52px; padding: 0 8px;
                 border: none; border-radius: 8px;
                 background: transparent; color: #1d1d1f;
                 font: 500 12px inherit; cursor: pointer;
                 transition: background .12s ease;
             }
             .lf-et-size:hover { background: rgba(0,0,0,.06); }
-            .lf-et-size:focus { outline: none; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+            .lf-et-size-val { min-width: 18px; text-align: right; font-variant-numeric: tabular-nums; }
+            .lf-et-sizemenu {
+                display: none; position: absolute; top: 32px; left: 0; z-index: 5;
+                max-height: 260px; overflow-y: auto;
+                background: #fff; border-radius: 12px; padding: 5px;
+                box-shadow: 0 12px 32px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.08);
+            }
+            .lf-et-sizemenu.open { display: block; }
+            .lf-et-sizemenu button {
+                display: block; width: 62px; padding: 7px 10px;
+                background: none; border: none; border-radius: 7px;
+                font: 500 13px inherit; color: #1d1d1f; text-align: left; cursor: pointer;
+            }
+            .lf-et-sizemenu button:hover { background: rgba(0,0,0,.06); }
+            .lf-et-sizemenu button.on { background: #007aff; color: #fff; }
 
             .lf-et-swatch {
                 display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
@@ -2595,7 +2611,9 @@
                 border: none; border-radius: 12px;
                 background: rgba(0,0,0,.025);
                 min-height: 280px; max-height: 44vh; overflow-y: auto;
-                font-size: 13.5px; line-height: 1.65; color: #1d1d1f;
+                /* v100.9.83: 16px by default, so the toolbar reads 16 on untouched text
+                   and anything typed matches the size the emails are written at. */
+                font-size: 16px; line-height: 1.6; color: #1d1d1f;
                 letter-spacing: -.01em; outline: none;
                 transition: background .15s ease, box-shadow .15s ease;
             }
@@ -2605,7 +2623,7 @@
             }
             .lf-et-body::-webkit-scrollbar { width: 9px; }
             .lf-et-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 980px; border: 2px solid transparent; background-clip: content-box; }
-            .lf-et-body .lf-et-ph { color: #007aff; font-weight: 600; }
+            .lf-et-body .lf-et-ph { color: #7c3aed; font-weight: 700; }
 
             .lf-et-foot {
                 display: flex; align-items: center; gap: 10px;
@@ -4220,18 +4238,7 @@
     // Matching whole elements kept failing: one shape deleted the neighbouring lines,
     // another matched nothing at all and left the raw {placeholder} in the email.
     function lfEtSwapPlaceholder(root, placeholder, buildNodes) {
-        // v100.9.76b: the editor stores "{name}" with each brace in its own <b>, which
-        // splits the text across three nodes so nothing ever matched - this is why the
-        // to-do list placeholder kept coming out as literal text in the sent email.
-        // Brace-only inline wrappers are unwrapped first; everything else keeps its
-        // formatting.
-        Array.from(root.querySelectorAll('b, i, u, s, span, strong, em, font')).forEach(el => {
-            const t = (el.textContent || '').trim();
-            if (t !== '{' && t !== '}' && !/^\{[^}]*$/.test(t) && !/^[^{]*\}$/.test(t)) return;
-            if (el.children.length) return;
-            el.replaceWith(document.createTextNode(el.textContent));
-        });
-        root.normalize();
+        lfEtFlattenBraces(root);
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
         const hits = [];
         while (walker.nextNode()) {
@@ -4260,7 +4267,23 @@
         return true;
     }
 
+    // v100.9.81: the editor stores every placeholder with its braces in separate <b>
+    // elements, so "{borrower(s)}" lives in three text nodes. Substitution works on
+    // text nodes, so it never saw a whole placeholder and nothing was ever filled in.
+    // Flattening first is what makes every {placeholder} work, not just the two block
+    // ones that had their own flattening step.
+    function lfEtFlattenBraces(root) {
+        Array.from(root.querySelectorAll('b, i, u, s, span, strong, em, font')).forEach(el => {
+            if (el.children.length) return;
+            const t = (el.textContent || '').trim();
+            if (t !== '{' && t !== '}' && !/^\{[^}]*$/.test(t) && !/^[^{]*\}$/.test(t)) return;
+            el.replaceWith(document.createTextNode(el.textContent));
+        });
+        root.normalize();
+    }
+
     function lfEtSubstitute(root, facts, listHtml) {
+        lfEtFlattenBraces(root);                 // v100.9.81: before anything else
         const map = lfEtFillMap(facts);
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
         const texts = [];
@@ -4499,10 +4522,14 @@
 
         const toolHtml = TOOLS.map(t => {
             if (t.sep)  return '<span class="lf-et-sep"></span>';
-            if (t.size) return '<select class="lf-et-size" title="Font size">' +
-                               '<option value="">\u2014</option>' +
-                               SIZES.map(v => '<option value="' + v + '">' + v + '</option>').join('') +
-                               '</select>';
+            if (t.size) return '<span class="lf-et-sizewrap">' +
+                               '<button type="button" class="lf-et-size" title="Font size">' +
+                                 '<span class="lf-et-size-val">\u2014</span>' +
+                                 '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
+                               '</button>' +
+                               '<div class="lf-et-sizemenu">' +
+                                 SIZES.map(v => '<button type="button" data-px="' + v + '">' + v + '</button>').join('') +
+                               '</div></span>';
             if (t.fore) return '<button type="button" class="lf-et-swatch" data-kind="fg" title="Foreground Color">' +
                                '<span class="lf-et-sw-a">A</span><span class="lf-et-sw-bar" style="background:#212529"></span>' +
                                '</button>';
@@ -4541,9 +4568,16 @@
         const titleInput = wrap.querySelector('.lf-et-title');
         titleInput.value = lfEtTitle(which);
         body.innerHTML = lfEtHtml(which);
+        lfEtFlattenBraces(body);       // v100.9.82: repair anything saved by an older build
 
         // mark the placeholders so they stand out while editing, without storing the marker
         const markPlaceholders = () => {
+            // v100.9.82: older versions stored the braces inside plain <b> elements, so
+            // a placeholder arrived split across three text nodes. Nothing matched it:
+            // the braces never turned purple and, in the versions before the flattening
+            // step, nothing was filled in either. Repairing the shape first makes the
+            // editor self-correcting for templates saved by any earlier build.
+            lfEtFlattenBraces(body);
             const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
             const nodes = [];
             while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -4574,7 +4608,15 @@
             });
         };
         markPlaceholders();
-        body.addEventListener('blur', markPlaceholders);
+        // v100.9.78: only re-mark when focus leaves the dialog. Doing it on every blur
+        // rebuilt text nodes while the user was reaching for the toolbar, which left
+        // the remembered selection pointing at nodes that no longer existed.
+        body.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (wrap.contains(document.activeElement)) return;
+                markPlaceholders();
+            }, 0);
+        });
 
         // v100.9.56: the toolbar follows the cursor. Without this the size box kept
         // showing whatever was set last, so selecting smaller text still read 16px.
@@ -4587,7 +4629,9 @@
             const cs = getComputedStyle(node);
 
             const px = String(Math.round(parseFloat(cs.fontSize)));
-            sizeSel.value = sizeSel.querySelector('option[value="' + px + '"]') ? px : '';
+            if (sizeVal) sizeVal.textContent = px || '\u2014';
+            if (sizeMenu) sizeMenu.querySelectorAll('button[data-px]').forEach(b =>
+                b.classList.toggle('on', b.dataset.px === px));
 
             const fg = lfEtRgbToHex(cs.color);
             if (fg && foreBtn) foreBtn.querySelector('.lf-et-sw-bar').style.background = fg;
@@ -4649,44 +4693,112 @@
             return true;
         };
         ['keyup', 'mouseup'].forEach(ev => body.addEventListener(ev, rememberRange));
-        sizeSel.addEventListener('mousedown', rememberRange);
-        // v100.9.62: the size is applied by wrapping the selection directly. Going via
-        // execCommand('fontSize', '7') and converting afterwards left text at the
-        // browser's size 7 - roughly 48px - whenever the markup it produced did not
-        // match what the conversion looked for. Wrapping is exact: 16 means 16.
-        const applyFontSize = (px) => {
+        // v100.9.79: one routine for size, text colour and highlight, all in the DOM.
+        // The colours went through execCommand and shared the font size's old failure:
+        // clicking a swatch moved focus out of the editor, the browser dropped the
+        // selection, and the command then had nothing to act on.
+        //
+        // v100.9.78: done entirely in the DOM, with no execCommand.
+        //
+        // Two earlier attempts failed for opposite reasons: wrapping the whole
+        // selection in one span put that span outside the <li>s so the size never
+        // applied, and handing the job to execCommand left the result depending on
+        // markup the browser chooses, which differs between engines and could not be
+        // verified here at all.
+        //
+        // This walks the text nodes the selection actually covers, splits the two end
+        // nodes at the selection boundaries, and wraps each piece where it already
+        // sits - so a list item keeps its <li> and only its text is resized.
+        const applyInlineStyle = (prop, value) => {
             const sel = window.getSelection();
             if (!sel || !sel.rangeCount || sel.isCollapsed) { showToast('Select some text first'); return; }
             const range = sel.getRangeAt(0);
-            if (!body.contains(range.commonAncestorContainer)) return;
+            if (!body.contains(range.commonAncestorContainer)) { showToast('Select some text first'); return; }
 
-            const span = document.createElement('span');
-            span.style.fontSize = px + 'px';
-            try {
-                range.surroundContents(span);
-            } catch (e) {
-                // the selection crosses element boundaries - move it wholesale
-                span.appendChild(range.extractContents());
-                range.insertNode(span);
+            // every text node the selection touches
+            const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+            const touched = [];
+            while (walker.nextNode()) {
+                const n = walker.currentNode;
+                if (!n.nodeValue || !n.nodeValue.trim()) continue;
+                if (range.intersectsNode(n)) touched.push(n);
             }
-            // clear any size set deeper inside, so the new one actually shows
-            span.querySelectorAll('font[size], [style*="font-size"]').forEach(el => {
-                if (el.tagName === 'FONT') el.removeAttribute('size');
-                if (el.style) el.style.fontSize = '';
+            if (!touched.length) { showToast('Select some text first'); return; }
+
+            // trim the first and last to the exact selection boundaries
+            const last = touched[touched.length - 1];
+            if (last === range.endContainer && range.endOffset < last.nodeValue.length) {
+                last.splitText(range.endOffset);
+            }
+            const first = touched[0];
+            if (first === range.startContainer && range.startOffset > 0) {
+                touched[0] = first.splitText(range.startOffset);
+            }
+
+            const wrapped = [];
+            touched.forEach(tn => {
+                if (!tn.parentNode || !body.contains(tn)) return;
+                const span = document.createElement('span');
+                span.style[prop] = value;
+                tn.parentNode.insertBefore(span, tn);
+                span.appendChild(tn);
+                wrapped.push(span);
+            });
+            if (!wrapped.length) return;
+
+            // the same property set on an ancestor inside the editor would win
+            wrapped.forEach(sp => {
+                let a = sp.parentElement;
+                while (a && a !== body) {
+                    if (a.style && a.style[prop]) a.style[prop] = '';
+                    if (prop === 'fontSize' && a.tagName === 'FONT' && a.hasAttribute('size')) a.removeAttribute('size');
+                    a = a.parentElement;
+                }
+                // and inside the new span, anything deeper would win instead
+                sp.querySelectorAll('*').forEach(d => { if (d.style && d.style[prop]) d.style[prop] = ''; });
             });
 
+            // keep the same text selected so the size can be changed again
             const r2 = document.createRange();
-            r2.selectNodeContents(span);
+            r2.setStartBefore(wrapped[0]);
+            r2.setEndAfter(wrapped[wrapped.length - 1]);
             sel.removeAllRanges();
             sel.addRange(r2);
+            savedRange = r2.cloneRange();
             syncToolbar();
         };
-        sizeSel.addEventListener('change', () => {
-            if (!sizeSel.value) return;
+
+        // v100.9.80: a button and a popup, not a native <select>. A native select has
+        // to take focus to open, and the browser drops the text selection when it does
+        // - which is why the colours started working and the size never did. This is
+        // built the same way as the colour control: every mousedown is prevented, so
+        // the selection in the editor is never disturbed.
+        const sizeWrap = wrap.querySelector('.lf-et-sizewrap');
+        const sizeMenu = wrap.querySelector('.lf-et-sizemenu');
+        const sizeVal = wrap.querySelector('.lf-et-size-val');
+
+        const closeSizeMenu = () => sizeMenu.classList.remove('open');
+
+        sizeSel.addEventListener('mousedown', (e) => { e.preventDefault(); rememberRange(); });
+        sizeSel.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            sizeMenu.classList.toggle('open');
+        });
+
+        sizeMenu.addEventListener('mousedown', (e) => e.preventDefault());
+        sizeMenu.addEventListener('click', (e) => {
+            const b = e.target.closest('button[data-px]');
+            if (!b) return;
+            e.preventDefault(); e.stopPropagation();
+            closeSizeMenu();
             body.focus();
             restoreRange();
-            applyFontSize(sizeSel.value);
+            applyInlineStyle('fontSize', b.dataset.px + 'px');
         });
+
+        document.addEventListener('mousedown', (e) => {
+            if (sizeWrap && !sizeWrap.contains(e.target)) closeSizeMenu();
+        }, true);
 
         // the portal's own colour picker, reused
         const foreBtn = wrap.querySelector('.lf-et-swatch[data-kind="fg"]');
@@ -4696,12 +4808,16 @@
         const applyFore = (val) => {
             lastFore = val || '#212529';
             foreBtn.querySelector('.lf-et-sw-bar').style.background = lastFore;
-            exec('foreColor', lastFore);
+            body.focus();
+            restoreRange();
+            applyInlineStyle('color', lastFore);
         };
         const applyBack = (val) => {
             lastBack = val || '';
             backBtn.querySelector('.lf-et-sw-fill').style.background = lastBack || 'transparent';
-            exec(val ? 'hiliteColor' : 'removeFormat', val || undefined);
+            body.focus();
+            restoreRange();
+            applyInlineStyle('backgroundColor', lastBack || 'transparent');
         };
 
         [foreBtn, backBtn].forEach(btn => {
@@ -4709,9 +4825,14 @@
             btn.addEventListener('click', (e) => {
                 e.preventDefault(); e.stopPropagation();
                 const isBg = btn.dataset.kind === 'bg';
+                rememberRange();
                 lfDtOpenPalette(btn, isBg ? 'bg' : 'fg', isBg ? lastBack : lastFore,
                     (val) => { isBg ? applyBack(val) : applyFore(val); },
                     wrap.querySelector('.lf-et-box'));
+                // v100.9.79: clicking a swatch must not pull focus out of the editor,
+                // or the selection the colour is meant for is gone before it is used
+                const pal = wrap.querySelector('.lf-dt-palette');
+                if (pal) pal.addEventListener('mousedown', (ev) => ev.preventDefault(), true);
             });
         });
 
@@ -5009,7 +5130,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.76</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.83</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
