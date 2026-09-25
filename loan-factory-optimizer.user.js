@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.83
+// @version      100.9.88
 // @description  Update Sept 22nd, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.83 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.88 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -4232,93 +4232,144 @@
         };
     }
 
-    // Walks text nodes so bold, colour and size set in the editor are preserved.
-    // v100.9.76: placeholders are swapped at the text node that holds them, so the
-    // surrounding wrapper - whatever shape the editor saved it in - is left alone.
-    // Matching whole elements kept failing: one shape deleted the neighbouring lines,
-    // another matched nothing at all and left the raw {placeholder} in the email.
-    function lfEtSwapPlaceholder(root, placeholder, buildNodes) {
-        lfEtFlattenBraces(root);
+    // ==========================================
+    // PLACEHOLDER MATCHING ACROSS ELEMENTS (v100.9.88)
+    //
+    // Rebuilt. Every earlier version tried to reshape the template's HTML so that a
+    // placeholder ended up inside one text node - unwrapping spans, moving braces
+    // around. Each of those reshapes threw away formatting: a size set on the to-do
+    // line came back as plain text, because the wrapper carrying it was the very thing
+    // being removed to make the match work.
+    //
+    // Nothing is reshaped now. The text of the whole subtree is read as one string, and
+    // a Range is built across whatever nodes the placeholder happens to span. Matching
+    // no longer cares how the markup is arranged, so the markup never has to change.
+    // ==========================================
+    function lfEtTextMap(root) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        const hits = [];
+        const nodes = [];
+        let text = '';
         while (walker.nextNode()) {
-            if ((walker.currentNode.nodeValue || '').indexOf(placeholder) >= 0) hits.push(walker.currentNode);
+            const n = walker.currentNode;
+            nodes.push({ node: n, start: text.length });
+            text += n.nodeValue;
         }
-        if (!hits.length) return false;
-
-        hits.forEach(tn => {
-            const val = tn.nodeValue;
-            const i = val.indexOf(placeholder);
-            const frag = document.createDocumentFragment();
-            if (i > 0) frag.appendChild(document.createTextNode(val.slice(0, i)));
-            buildNodes().forEach(n => frag.appendChild(n));
-            const rest = val.slice(i + placeholder.length);
-            if (rest) frag.appendChild(document.createTextNode(rest));
-
-            // a block element cannot live inside an inline wrapper - lift it out
-            let host = tn.parentNode;
-            if (host && /^(B|I|U|S|SPAN|EM|STRONG|FONT)$/.test(host.tagName) &&
-                (host.textContent || '').trim() === placeholder) {
-                host.parentNode.replaceChild(frag, host);
-            } else {
-                tn.parentNode.replaceChild(frag, tn);
-            }
-        });
-        return true;
+        return { nodes: nodes, text: text };
     }
 
-    // v100.9.81: the editor stores every placeholder with its braces in separate <b>
-    // elements, so "{borrower(s)}" lives in three text nodes. Substitution works on
-    // text nodes, so it never saw a whole placeholder and nothing was ever filled in.
-    // Flattening first is what makes every {placeholder} work, not just the two block
-    // ones that had their own flattening step.
-    function lfEtFlattenBraces(root) {
-        Array.from(root.querySelectorAll('b, i, u, s, span, strong, em, font')).forEach(el => {
-            if (el.children.length) return;
-            const t = (el.textContent || '').trim();
-            if (t !== '{' && t !== '}' && !/^\{[^}]*$/.test(t) && !/^[^{]*\}$/.test(t)) return;
-            el.replaceWith(document.createTextNode(el.textContent));
+    // a Range covering [from, to) of the concatenated text
+    function lfEtRangeFor(map, from, to) {
+        const locate = (pos, isEnd) => {
+            for (let i = 0; i < map.nodes.length; i++) {
+                const e = map.nodes[i];
+                const end = e.start + e.node.nodeValue.length;
+                if (isEnd ? (pos > e.start && pos <= end) : (pos >= e.start && pos < end)) {
+                    return { node: e.node, offset: pos - e.start };
+                }
+            }
+            const last = map.nodes[map.nodes.length - 1];
+            return last ? { node: last.node, offset: last.node.nodeValue.length } : null;
+        };
+        const a = locate(from, false), b = locate(to, true);
+        if (!a || !b) return null;
+        const r = document.createRange();
+        r.setStart(a.node, a.offset);
+        r.setEnd(b.node, b.offset);
+        return r;
+    }
+
+    // Finds every occurrence of `placeholder`, tolerating a non-breaking space, and
+    // hands each one to replaceWith(range) -> array of nodes, or null to delete.
+    function lfEtReplaceAcross(root, placeholder, buildNodes) {
+        let replaced = false;
+        for (let guard = 0; guard < 20; guard++) {
+            const map = lfEtTextMap(root);
+            const hay = map.text.replace(/\u00a0/g, ' ');
+            const idx = hay.indexOf(placeholder);
+            if (idx < 0) break;
+
+            const range = lfEtRangeFor(map, idx, idx + placeholder.length);
+            if (!range) break;
+
+            // v100.9.88: when the placeholder's own words sit in a wrapper - which is
+            // what setting a size or colour on that line produces - deleting the range
+            // takes the wrapper with it. Its formatting is read first and carried onto
+            // whatever goes in, so "18px on the to-do line" survives the swap.
+            const carry = {};
+            (() => {
+                const CARRY_PROPS = ['fontSize', 'color', 'backgroundColor', 'fontWeight', 'fontStyle'];
+                const frag = range.cloneContents();
+                const styled = frag.querySelector('[style]');
+                const source = styled || (range.commonAncestorContainer.nodeType === 1
+                    ? range.commonAncestorContainer
+                    : range.commonAncestorContainer.parentElement);
+                if (!source || !source.style) return;
+                CARRY_PROPS.forEach(prop => { if (source.style[prop]) carry[prop] = source.style[prop]; });
+            })();
+
+            const nodes = buildNodes();
+            range.deleteContents();
+            if (nodes && nodes.length) {
+                Object.keys(carry).forEach(prop => {
+                    nodes.forEach(n => {
+                        if (n.nodeType === 1 && n.style && !n.style[prop]) n.style[prop] = carry[prop];
+                    });
+                });
+                const frag2 = document.createDocumentFragment();
+                nodes.forEach(n => frag2.appendChild(n));
+                range.insertNode(frag2);
+            }
+            replaced = true;
+        }
+        return replaced;
+    }
+
+    // The line a placeholder sat on is dropped when it resolved to nothing and there is
+    // nothing else on it - an escrow loan with no co-borrower leaves no blank line.
+    function lfEtDropEmptyLines(root) {
+        Array.from(root.querySelectorAll('div, p, li')).forEach(el => {
+            if (!root.contains(el)) return;
+            if (el.querySelector('ol, ul, table, img, br')) return;
+            if ((el.textContent || '').replace(/\u00a0/g, ' ').trim() !== '') return;
+            if (el.children.length && !Array.from(el.children).every(c => /^(B|I|U|S|SPAN|STRONG|EM|FONT)$/.test(c.tagName))) return;
+            el.remove();
         });
-        root.normalize();
     }
 
     function lfEtSubstitute(root, facts, listHtml) {
-        lfEtFlattenBraces(root);                 // v100.9.81: before anything else
         const map = lfEtFillMap(facts);
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        const texts = [];
-        while (walker.nextNode()) texts.push(walker.currentNode);
-        texts.forEach(node => {
-            let v = node.nodeValue;
-            if (v.indexOf('{') < 0) return;
-            Object.keys(map).forEach(k => { if (map[k]) v = v.split(k).join(map[k]); });
-            if (v !== node.nodeValue) node.nodeValue = v;
+
+        // simple values first - these keep whatever formatting the line carries
+        Object.keys(map).forEach(k => {
+            if (!map[k]) return;
+            lfEtReplaceAcross(root, k, () => [document.createTextNode(map[k])]);
         });
 
-        // v100.9.60: {co-borrowers} becomes one block per co-borrower, or disappears
-        // when the loan has none.
-        lfEtSwapPlaceholder(root, '{co-borrowers}', () => {
+        // every co-borrower on the loan, or nothing at all
+        lfEtReplaceAcross(root, '{co-borrowers}', () => {
             const list = facts.coBorrowers || [];
-            return list.length ? list.reduce((acc, c) => {
+            const out = [];
+            list.forEach(c => {
                 [['Co-borrower', c.name], ['Phone number', c.phone], ['DOB', c.dob], ['Email address', c.email]]
                     .forEach(([k, v]) => {
                         if (!v) return;
                         const d = document.createElement('div');
                         d.textContent = k + ': ' + v;
-                        acc.push(d);
+                        out.push(d);
                     });
-                return acc;
-            }, []) : [];
+            });
+            return out;
         });
 
-        // the to-do list keeps the portal's own markup, exactly as generated
-        lfEtSwapPlaceholder(root, '{list of to-do list item(s)}', () => {
+        // the to-do list, exactly as the portal generated it
+        lfEtReplaceAcross(root, '{list of to-do list item(s)}', () => {
             if (!listHtml) return [];
             const tmp = document.createElement('div');
             tmp.innerHTML = listHtml;
             return Array.from(tmp.childNodes);
         });
 
+        lfEtDropEmptyLines(root);
         return root;
     }
 
@@ -4334,6 +4385,11 @@
     // v100.9.70: the opening line is not always "Dear". A template that greets with
     // "Hi" made the markers unfindable, so the whole feature quietly did nothing on
     // any email that had already been through it once.
+    // v100.9.87: the size the editor writes at, and the size the email is written at.
+    // Text with no size of its own inherited the portal's 14px once it landed in the
+    // email, so what was composed at 16 arrived at 14.
+    const LF_ET_BASE_PX = 16;
+
     const LF_ET_GREETING = /^(dear|hi|hello|good\s+(morning|afternoon|evening))\b/i;
 
     function lfEtFindMarkers(editor) {
@@ -4405,6 +4461,15 @@
         const holder = document.createElement('div');
         holder.innerHTML = lfEtHtml(which);
         lfEtSubstitute(holder, facts, listHtml);
+
+        // v100.9.87: carry the composing size across. Only blocks that set no size of
+        // their own are touched, so a line deliberately set to 18 stays at 18.
+        Array.from(holder.children).forEach(el => {
+            if (el.style && el.style.fontSize) return;
+            if (el.querySelector && el.querySelector('[style*="font-size"]')) return;
+            el.style.fontSize = LF_ET_BASE_PX + 'px';
+        });
+
         const fresh = Array.from(holder.childNodes);
 
         const { container, kids, sIdx, eIdx } = marks;
@@ -4568,16 +4633,9 @@
         const titleInput = wrap.querySelector('.lf-et-title');
         titleInput.value = lfEtTitle(which);
         body.innerHTML = lfEtHtml(which);
-        lfEtFlattenBraces(body);       // v100.9.82: repair anything saved by an older build
 
         // mark the placeholders so they stand out while editing, without storing the marker
         const markPlaceholders = () => {
-            // v100.9.82: older versions stored the braces inside plain <b> elements, so
-            // a placeholder arrived split across three text nodes. Nothing matched it:
-            // the braces never turned purple and, in the versions before the flattening
-            // step, nothing was filled in either. Repairing the shape first makes the
-            // editor self-correcting for templates saved by any earlier build.
-            lfEtFlattenBraces(body);
             const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
             const nodes = [];
             while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -5130,7 +5188,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.83</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.88</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
