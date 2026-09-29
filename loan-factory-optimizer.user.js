@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.88
-// @description  Update Sept 22nd, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.97
+// @description  Update Sept 28th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.88 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.97 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -86,6 +86,102 @@
         const sh = lfTtShift();
         return 'Counted Mon\u2013Fri, ' + sh.note + ' only (' + sh.label + ').';
     }
+
+    // ==========================================
+    // TICK BOX STYLING, INJECTED IMMEDIATELY (v100.9.94)
+    //
+    // This cannot wait for initAll(). The master stylesheet goes in once the page is
+    // ready, which is long after the first rows are painted - so the portal's blue box
+    // appeared and only turned purple when the stylesheet finally landed. That visible
+    // hand-over is what looked like an animation. Injecting here, at the top of the
+    // script, means the purple box is the only one ever drawn.
+    // ==========================================
+    (function lfInjectCheckboxCSS() {
+        const css = `
+            /* v100.9.93: the purple box is there from the first paint.
+               Until now the styling hung off a class that JavaScript adds on the next
+               loop pass - so the portal's blue box was drawn first and only turned
+               purple up to half a second later. That is the flash being complained
+               about; it was never an animation. The rule below needs no class, so the
+               blue box never gets a frame to itself. */
+            /* v100.9.95: the cell centres its box, horizontally and against the full
+               height of the row, so it lines up with the middle of the to-do item
+               however tall that row grows. Written with :has() so it needs no class
+               and therefore lands with the first paint. */
+            td:has(> input[type="checkbox"]), th:has(> input[type="checkbox"]),
+            td:has(> label > input[type="checkbox"]), th:has(> label > input[type="checkbox"]) {
+                text-align: center !important;
+                vertical-align: middle !important;
+                cursor: pointer;
+            }
+            /* v100.9.96: hover darkens whatever colour the row already is.
+               A fixed purple tint only read correctly on a white row - on the coloured
+               status rows it was invisible. A translucent black layer composites over
+               the row's own background instead: white turns grey, yellow turns deeper
+               yellow, green turns deeper green, with no need to know the colour. */
+            td:has(> input[type="checkbox"]):hover, th:has(> input[type="checkbox"]):hover,
+            td:has(> label > input[type="checkbox"]):hover, th:has(> label > input[type="checkbox"]):hover {
+                background-image: linear-gradient(rgba(0, 0, 0, .10), rgba(0, 0, 0, .10)) !important;
+            }
+
+            td > input[type="checkbox"], th > input[type="checkbox"],
+            td > label > input[type="checkbox"], th > label > input[type="checkbox"] {
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                appearance: none !important;
+                width: 17px !important;
+                height: 17px !important;
+                min-width: 17px !important;
+                min-height: 17px !important;
+                border: 1.5px solid #94a3b8 !important;
+                border-radius: 4px !important;
+                background: #fff !important;
+                background-image: none !important;
+                box-shadow: none !important;
+                outline: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+                transition: none !important;
+                animation: none !important;
+                cursor: pointer;
+            }
+
+            td > input[type="checkbox"]:checked, th > input[type="checkbox"]:checked,
+            td > label > input[type="checkbox"]:checked, th > label > input[type="checkbox"]:checked {
+                border-color: #7c3aed !important;
+                background: #7c3aed !important;
+                background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") !important;
+                background-size: 13px 13px !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+            }
+
+            /* the box the portal paints itself, and any movement it gives it */
+            td > input[type="checkbox"]::before, td > input[type="checkbox"]::after,
+            th > input[type="checkbox"]::before, th > input[type="checkbox"]::after {
+                content: none !important;
+                display: none !important;
+            }
+
+            /* v100.9.95: nothing in these cells may animate */
+            td:has(> input[type="checkbox"]) *, th:has(> input[type="checkbox"]) * {
+                transition: none !important;
+                animation: none !important;
+            }
+
+        `;
+        const put = () => {
+            if (document.getElementById('lf-cb-style')) return;
+            const st = document.createElement('style');
+            st.id = 'lf-cb-style';
+            st.textContent = css;
+            (document.head || document.documentElement).appendChild(st);
+        };
+        put();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', put, { once: true });
+        }
+    })();
 
     // ==========================================
     // ESCALATION DESK COPY BUTTONS (v100.8.85)
@@ -3630,6 +3726,43 @@
         return ctrls.length ? ctrls[ctrls.length - 1] : null;
     }
 
+    // v100.9.97: the drop box goes back the moment the portal redraws a row.
+    //
+    // Ticking a to-do makes the portal rebuild that row's Upload cell, which takes the
+    // box with it. The 500ms loop put it back, and in between the row was shorter by
+    // exactly the height of the box - so the table visibly jumped up and then settled
+    // again on every click. Reacting to the redraw itself closes that gap to a frame.
+    function lfWatchDropZones() {
+        if (document.documentElement.dataset.lfDropWatch === '1') return;
+        document.documentElement.dataset.lfDropWatch = '1';
+
+        let queued = false;
+        const run = () => {
+            queued = false;
+            try { lfInjectTodoDropZones(); } catch (e) {}
+        };
+
+        new MutationObserver((muts) => {
+            if (queued) return;
+            for (const m of muts) {
+                const touched = [m.target].concat(Array.from(m.addedNodes));
+                for (const n of touched) {
+                    if (!n || n.nodeType !== 1) continue;
+                    const cell = n.closest ? n.closest('td') : null;
+                    const hasUpload = (cell || n).querySelectorAll
+                        ? Array.from((cell || n).querySelectorAll('button, a, .btn'))
+                            .some(b => /^upload$/i.test((b.textContent || '').trim()))
+                        : false;
+                    if (!hasUpload) continue;
+                    if ((cell || n).querySelector('.lf-drop-box')) continue;   // already there
+                    queued = true;
+                    requestAnimationFrame(run);
+                    return;
+                }
+            }
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
     function lfInjectTodoDropZones() {
         // v100.9.67: the column is found from the Upload buttons themselves rather than
         // from a header. The old version required the heading to sit inside a <thead>;
@@ -4462,11 +4595,16 @@
         holder.innerHTML = lfEtHtml(which);
         lfEtSubstitute(holder, facts, listHtml);
 
-        // v100.9.87: carry the composing size across. Only blocks that set no size of
-        // their own are touched, so a line deliberately set to 18 stays at 18.
+        // v100.9.89: 16px is the baseline for the whole email, set on every line. A
+        // size set on the line itself is left alone, and a size set on part of a line
+        // sits deeper in the tree so it still wins - which is what makes "everything is
+        // 16 unless I changed that bit" true.
+        //
+        // The earlier version skipped any line that contained a resized fragment, so
+        // the rest of that line quietly fell back to the portal's 14px.
         Array.from(holder.children).forEach(el => {
-            if (el.style && el.style.fontSize) return;
-            if (el.querySelector && el.querySelector('[style*="font-size"]')) return;
+            if (!el.style) return;
+            if (el.style.fontSize) return;                 // the line has its own size
             el.style.fontSize = LF_ET_BASE_PX + 'px';
         });
 
@@ -5004,6 +5142,42 @@
     }
 
     // ==========================================
+    // EASIER TICK BOXES (v100.9.95)
+    //
+    // One listener on the document rather than one per cell. Ticking makes the portal
+    // redraw that cell, which threw away a listener attached to it - and because the
+    // cell was already marked as handled, it never got another one. That is why a
+    // second click in the cell area did nothing: the box could be ticked but not
+    // unticked. Delegation survives any redraw.
+    //
+    // Only cells whose sole contents are one checkbox respond. A cell with a link, a
+    // button or its own text is left alone.
+    // ==========================================
+    function lfCheckboxCellFor(target) {
+        const cell = target.closest ? target.closest('td, th') : null;
+        if (!cell) return null;
+        const boxes = cell.querySelectorAll('input[type="checkbox"]');
+        if (boxes.length !== 1) return null;
+        if (cell.querySelectorAll('a, button, select, textarea, input:not([type="checkbox"])').length) return null;
+        if ((cell.textContent || '').trim().length > 2) return null;
+        return boxes[0];
+    }
+
+    function lfBiggerCheckboxes() {
+        if (document.documentElement.dataset.lfCbDelegated === '1') return;
+        document.documentElement.dataset.lfCbDelegated = '1';
+
+        document.addEventListener('click', (e) => {
+            if (e.target && e.target.tagName === 'INPUT') return;   // the box handles itself
+            const cb = lfCheckboxCellFor(e.target);
+            if (!cb || cb.disabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+            cb.click();                                             // ticks and unticks alike
+        }, true);
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
@@ -5188,7 +5362,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.88</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.97</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -6397,7 +6571,9 @@
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
             try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
+            try { lfWatchDropZones(); } catch (err) {}               // v100.9.97
             try { lfApplyAllLoanOwners(); } catch (err) {}           // v100.9.73
+            try { lfBiggerCheckboxes(); } catch (err) {}             // v100.9.90
             try { lfGsSync(); } catch (err) {}                       // v100.9.42
             try { lfEtInjectButton(); } catch (err) {}               // v100.9.52
 
