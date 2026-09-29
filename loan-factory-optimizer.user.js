@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.97
-// @description  Update Sept 28th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
+// @version      100.9.109
+// @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
 // @match        *://loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.97 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.109 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -148,8 +148,8 @@
 
             td > input[type="checkbox"]:checked, th > input[type="checkbox"]:checked,
             td > label > input[type="checkbox"]:checked, th > label > input[type="checkbox"]:checked {
-                border-color: #7c3aed !important;
-                background: #7c3aed !important;
+                border-color: #f36f20 !important;
+                background: #f36f20 !important;
                 background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") !important;
                 background-size: 13px 13px !important;
                 background-position: center !important;
@@ -2493,6 +2493,122 @@
             .lf-sort-btn.active { color: #f36f20; }
             /* Sorted-column highlight (v100.8.35) */
             .lf-sorted-col { background-color: rgba(243, 111, 32, 0.12) !important; border-radius: 4px; }
+
+            /* v100.9.98: status column, sortable headers, select-by-status buttons */
+            th.lf-status-head, td.lf-status-head {
+                font-weight: 800 !important;
+                color: #f36f20 !important;
+            }
+            /* v100.9.101: one segmented control rather than three loose pills, sized
+               and aligned to the toolbar buttons it sits beside. */
+            .lf-todo-picks {
+                display: inline-flex;
+                align-items: stretch;
+                margin-left: 10px;
+                vertical-align: middle;
+                border: 1px solid #d5d8dc;
+                border-radius: 6px;
+                overflow: hidden;
+                background: #fff;
+            }
+            .lf-todo-pick {
+                display: inline-flex; align-items: center; gap: 6px;
+                height: 30px; padding: 0 12px; margin: 0;
+                background: transparent; color: #495057;
+                border: none; border-right: 1px solid #e2e8f0;
+                font: 600 12px/1 inherit; letter-spacing: .1px;
+                cursor: pointer; white-space: nowrap;
+                transition: background .12s ease, color .12s ease;
+            }
+            .lf-todo-pick:last-child { border-right: none; }
+            .lf-todo-pick:disabled { opacity: .45; cursor: default; }
+            .lf-todo-pick:disabled:hover { background: transparent; color: #495057; }
+            .lf-todo-pick .lf-pick-ico { flex: none; opacity: .55; }
+            .lf-todo-pick:hover { background: #fff3ea; color: #d95707; }
+            .lf-todo-pick:hover .lf-pick-ico { opacity: 1; }
+            .lf-todo-pick[data-on="1"] {
+                background: #f36f20; color: #fff;
+                border-right-color: rgba(255, 255, 255, .35);
+            }
+            .lf-todo-pick[data-on="1"] .lf-pick-ico { opacity: 1; }
+            /* the box takes the button's text colour, the tick its background colour */
+            .lf-pick-check { stroke: #f36f20; }
+            .lf-todo-pick[data-on="1"]:hover .lf-pick-check { stroke: #d95707; }
+            .lf-todo-pick[data-on="1"]:hover { background: #d95707; }
+
+            /* the whole heading is the sort control */
+            th.lf-sortable-head, td.lf-sortable-head { cursor: pointer; user-select: none; white-space: nowrap; }
+            th.lf-sortable-head:hover, td.lf-sortable-head:hover { color: #d95707; }
+
+            /* v100.9.106: the Clear button holds its size as the count changes */
+            .lf-clear-steady {
+                min-width: 86px !important;
+                text-align: center !important;
+                box-sizing: border-box !important;
+            }
+
+            /* v100.9.104: draggable column headings */
+            th.lf-col-draggable { cursor: grab; }
+            th.lf-col-draggable:active { cursor: grabbing; }
+            th.lf-col-dragging { opacity: .45; }
+            th.lf-col-over { box-shadow: inset 3px 0 0 #f36f20; }
+
+            /* v100.9.103: to-do list readability */
+
+            /* 1. status chips */
+            .lf-st-chip {
+                display: inline-block;
+                padding: 2px 9px;
+                margin: 2px 0;
+                border-radius: 980px;
+                font: 700 11px/1.5 inherit;
+                letter-spacing: .2px;
+                white-space: nowrap;
+            }
+            .lf-st-req { background: #fff3cd; color: #7a5b00; box-shadow: inset 0 0 0 1px rgba(122, 91, 0, .18); }
+            .lf-st-sub { background: #d1e7dd; color: #14603c; box-shadow: inset 0 0 0 1px rgba(20, 96, 60, .18); }
+            .lf-st-rec { background: #cfe2ff; color: #123b78; box-shadow: inset 0 0 0 1px rgba(18, 59, 120, .18); }
+
+            /* 2. the AI panel, folded */
+            .lf-ai-panel { cursor: pointer; }
+            .lf-ai-caret {
+                display: inline-block; margin-left: 7px;
+                font-size: 11px; opacity: .6;
+                transition: transform .15s ease;
+            }
+            .lf-ai-panel.lf-ai-closed .lf-ai-caret { transform: rotate(-90deg); }
+            .lf-ai-panel.lf-ai-closed .lf-ai-body { display: none !important; }
+
+            /* 3. timestamps on one line, digits aligned */
+            td.lf-todo-date {
+                white-space: nowrap;
+                font-variant-numeric: tabular-nums;
+            }
+
+            /* 4. the heading row stays put while the list scrolls */
+            table.lf-todo-table thead th,
+            table.lf-todo-table tr:first-child th {
+                position: sticky;
+                top: 0;
+                z-index: 3;
+                background: #fff;
+                box-shadow: inset 0 -1px 0 #e2e8f0;
+            }
+
+            /* 5. long file names are shortened for display only */
+            table.lf-todo-table td a {
+                display: inline-block;
+                max-width: 260px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                vertical-align: bottom;
+            }
+            table.lf-todo-table td a:hover {
+                max-width: none;
+                white-space: normal;
+                overflow: visible;
+            }
 
             /* v100.9.21: red caution text on the system-notice option */
             .lf-warn-caution { color: #dc2626; font-weight: 700; }
@@ -5178,6 +5294,616 @@
     }
 
     // ==========================================
+    // TO-DO STATUS TOOLS (v100.9.99)
+    //
+    // Rewritten. v100.9.98 reached far outside the Quick Tips bar: it took the closest
+    // ancestor matching "div", which on this page is a container holding the whole
+    // to-do area. It then stripped every <ul>/<p> inside - which is where the bullet
+    // lists in the descriptions live - and swallowed clicks across that container,
+    // so the Current/Completed tab filter stopped working and every row was shown and
+    // selected. Everything below is scoped to a single element or a single table.
+    // ==========================================
+    // v100.9.106: drawn as a tick box rather than an emoji, so the button reads the
+    // way the rows do - an empty box when nothing of that status is selected, a filled
+    // one when some are.
+    const LF_PICK_BOX_OFF = '<svg class="lf-pick-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"></rect></svg>';
+    // v100.9.109: the tick is drawn in the button's own orange, on a white box. It was
+    // white on white before - the box filled with currentColor (white on the orange
+    // button) and the tick stroked white as well, so the tick was invisible and the
+    // icon read as a plain orange-on-white square.
+    const LF_PICK_BOX_ON = '<svg class="lf-pick-ico lf-pick-ico-on" viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"></rect><polyline class="lf-pick-check" points="7.5 12.2 10.8 15.5 16.5 8.8" fill="none" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
+
+    const LF_TODO_GROUPS = {
+        created:   { label: 'Created',   match: (st) => st === '' },
+        // v100.9.101: "Requested" means only Requested. A to-do that is Requested AND
+        // Submitted To Lender belongs to Submitted - it has moved on.
+        requested: { label: 'Requested', match: (st) => /^requested$/i.test(st) },
+        submitted: { label: 'Submitted', match: (st) => /submitted/i.test(st) }
+    };
+
+    // The header row is the one carrying "Description" - not simply the table's first
+    // row, which on this page can be a filter row.
+    function lfTodoTable() {
+        for (const table of document.querySelectorAll('table')) {
+            for (const row of Array.from(table.rows).slice(0, 4)) {
+                const cells = Array.from(row.cells || []).map(c => (c.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase());
+                if (!cells.includes('description')) continue;
+                const statusIdx = cells.findIndex(t => t === 'action' || t === 'status');
+                if (statusIdx < 0) continue;
+                if (table.dataset.lfTodoTable !== '1') {
+                    table.dataset.lfTodoTable = '1';
+                    // undo the pipeline colours a previous version painted on here
+                    table.querySelectorAll('tr.lf-row-new, tr.lf-row-green, tr.lf-row-yellow, tr.lf-row-blue, tr.lf-row-red, tr.lf-row-purple')
+                        .forEach(r => r.classList.remove('lf-row-new', 'lf-row-green', 'lf-row-yellow', 'lf-row-blue', 'lf-row-red', 'lf-row-purple'));
+                }
+                return { table, head: row, cells, statusIdx };
+            }
+        }
+        return null;
+    }
+
+    // Only rows that are actually on screen - the Completed tab's rows stay hidden in
+    // the DOM, and selecting those was never wanted.
+    function lfTodoRows(info) {
+        return Array.from(info.table.rows).filter(r =>
+            r !== info.head &&
+            r.cells.length > info.statusIdx &&
+            r.querySelector('input[type="checkbox"]') &&
+            r.offsetParent !== null);
+    }
+
+    // v100.9.100: the status is read from the text the user can actually see.
+    //
+    // The Clear control carries a dropdown menu, and that menu lives inside this same
+    // cell with its options hidden: Requested, Submitted To Lender, Received. Reading
+    // the cell's textContent therefore returned all three words for EVERY row - so
+    // every group matched every row and the buttons selected the whole list, and every
+    // row sorted equal so the Status sort appeared to do nothing.
+    function lfTodoStatusOf(row, idx) {
+        const cell = row.cells && row.cells[idx];
+        if (!cell) return '';
+
+        const hidden = (el) => {
+            if (el.hidden) return true;
+            const st = el.style || {};
+            if (st.display === 'none' || st.visibility === 'hidden') return true;
+            if (typeof getComputedStyle === 'function') {
+                const cs = getComputedStyle(el);
+                if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return true;
+            }
+            return false;
+        };
+
+        let out = '';
+        const walk = (node) => {
+            Array.from(node.childNodes).forEach(n => {
+                if (n.nodeType === 3) { out += n.nodeValue; return; }
+                if (n.nodeType !== 1) return;
+                if (/^(BUTTON|A|SELECT|OPTION|SVG|UL|OL|LI)$/.test(n.tagName)) return;
+                const cls = (n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className) || '';
+                if (/dropdown|menu|caret|btn/i.test(String(cls))) return;
+                if (hidden(n)) return;
+                walk(n);
+            });
+        };
+        walk(cell);
+        return out.replace(/\s+/g, ' ').trim();
+    }
+
+    // ---------- the column is called Status ----------
+    // v100.9.102: renaming is idempotent and repairs itself.
+    //
+    // The old version stamped the cell with a flag and returned early next time. When
+    // the portal redrew the header the text went back to "Action" while the flag stayed
+    // behind, so the rename never ran again - which is why "Action" kept reappearing.
+    // There is no flag now: the cell says Action, it becomes Status, every pass.
+    //
+    // Only the text node is touched, so the sort control living in the same cell is
+    // left in place instead of being wiped and rebuilt.
+    function lfTodoRenameStatus(info) {
+        const cell = info.head.cells[info.statusIdx];
+        if (!cell) return;
+
+        let renamed = false;
+        Array.from(cell.childNodes).forEach(n => {
+            if (n.nodeType !== 3) return;
+            if (!/action/i.test(n.nodeValue)) return;
+            n.nodeValue = n.nodeValue.replace(/action/i, 'Status');
+            renamed = true;
+        });
+        if (!renamed && !/status/i.test(cell.textContent || '')) {
+            cell.insertBefore(document.createTextNode('Status'), cell.firstChild);
+        }
+        cell.classList.add('lf-status-head');
+    }
+
+    // The header is rebuilt by the portal now and then; reacting to that restores the
+    // name within a frame instead of leaving "Action" on screen until the next pass.
+    function lfWatchTodoHeader() {
+        if (document.documentElement.dataset.lfTodoHeadWatch === '1') return;
+        document.documentElement.dataset.lfTodoHeadWatch = '1';
+
+        let queued = false;
+        new MutationObserver(() => {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(() => {
+                queued = false;
+                // v100.9.108: the readability pass runs here too, so a redrawn cell has
+                // its seconds taken off within a frame instead of showing them until
+                // the next sweep of the 500ms loop.
+                try { lfTodoSelectTools(); } catch (e) {}
+                try { lfTodoReadability(); } catch (e) {}
+            });
+        }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
+    // ---------- sorting, using the same control as the 1003 tables ----------
+    function lfTodoSortKey(row, idx, kind) {
+        if (kind === 'status') {
+            const st = lfTodoStatusOf(row, idx);
+            if (!st) return 0;
+            if (/requested/i.test(st) && /submitted/i.test(st)) return 2;
+            if (/requested/i.test(st)) return 1;
+            if (/submitted/i.test(st)) return 3;
+            return 4;
+        }
+        const txt = ((row.cells[idx] || {}).textContent || '').replace(/\s+/g, ' ').trim();
+        if (kind === 'date') {
+            const t = Date.parse(txt.replace(',', ''));
+            return isNaN(t) ? 0 : t;
+        }
+        return txt.toLowerCase();
+    }
+
+    function lfTodoAddSorting(info) {
+        const KINDS = { created: 'date', updated: 'date', type: 'text', status: 'status', action: 'status' };
+        Array.from(info.head.cells).forEach(cell => {
+            const label = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+            const kind = KINDS[label.toLowerCase()];
+            if (!kind) return;
+            if (cell.querySelector('.lf-sort-btn')) return;
+
+            const idx = cell.cellIndex;
+            const btn = document.createElement('span');
+            btn.className = 'lf-sort-btn';
+            btn.innerHTML = SORT_NEUTRAL_SVG;
+            btn.title = 'Sort by ' + label;
+
+            // v100.9.101: clicking the heading itself sorts, not just the small arrow
+            cell.classList.add('lf-sortable-head');
+            const doSort = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const table = info.table;
+                let asc = true;
+                if (table.dataset.lfTodoSortCol === String(idx)) asc = table.dataset.lfTodoSortDir !== 'asc';
+                table.dataset.lfTodoSortCol = String(idx);
+                table.dataset.lfTodoSortDir = asc ? 'asc' : 'desc';
+
+                table.querySelectorAll('.lf-sort-btn').forEach(b => {
+                    b.innerHTML = SORT_NEUTRAL_SVG; b.classList.remove('active');
+                });
+                Array.from(info.head.cells).forEach(c => c.classList.remove('lf-sorted-col'));
+                btn.innerHTML = asc ? SORT_ASC_SVG : SORT_DESC_SVG;
+                btn.classList.add('active');
+                cell.classList.add('lf-sorted-col');
+
+                const rows = lfTodoRows(info);
+                if (!rows.length) return;
+                const parent = rows[0].parentNode;
+                rows.sort((a, b) => {
+                    const va = lfTodoSortKey(a, idx, kind), vb = lfTodoSortKey(b, idx, kind);
+                    if (va < vb) return asc ? -1 : 1;
+                    if (va > vb) return asc ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(r => parent.appendChild(r));
+            };
+            btn.onclick = doSort;
+            cell.addEventListener('click', (e) => {
+                if (e.target.closest('.lf-sort-btn')) return;   // the arrow fires its own
+                doSort(e);
+            });
+            cell.appendChild(btn);
+        });
+    }
+
+    // ---------- select every to-do sharing a status ----------
+    // v100.9.100: the buttons sit in the toolbar beside "+ Borrower to-do". Quick Tips
+    // is not touched at all now - the previous version reached into it and broke the
+    // tab filter along the way.
+    // v100.9.104: each button reports how many of its status are selected right now,
+    // and keeps reporting it when rows are ticked one at a time. Clicking selects the
+    // whole status, or clears it once they are all selected.
+    function lfTodoPickCount(grp) {
+        const live = lfTodoTable();
+        if (!live) return { total: 0, picked: 0 };
+        let total = 0, picked = 0;
+        lfTodoRows(live).forEach(row => {
+            if (!grp.match(lfTodoStatusOf(row, live.statusIdx))) return;
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (!cb) return;
+            total++;
+            if (cb.checked) picked++;
+        });
+        return { total: total, picked: picked };
+    }
+
+    function lfTodoPaintPick(btn, grp) {
+        const { total, picked } = lfTodoPickCount(grp);
+        const icon = picked > 0 ? LF_PICK_BOX_ON : LF_PICK_BOX_OFF;
+        const text = (picked > 0 ? picked + ' ' : '') + grp.label;
+        const html = icon + '<span class="lf-pick-label">' + text + '</span>';
+        if (btn.innerHTML !== html) btn.innerHTML = html;
+        btn.dataset.on = picked > 0 ? '1' : '0';
+        btn.disabled = total === 0;
+        btn.title = total
+            ? picked + ' of ' + total + ' selected'
+            : 'No to-do has this status';
+    }
+
+    function lfTodoRefreshPicks() {
+        document.querySelectorAll('.lf-todo-pick').forEach(btn => {
+            const grp = LF_TODO_GROUPS[btn.dataset.group];
+            if (grp) lfTodoPaintPick(btn, grp);
+        });
+    }
+
+    // v100.9.106: the toolbar's Clear button grows as soon as a count is appended to
+    // it, shoving everything to its right along. A minimum width holds it steady for
+    // counts up to two digits; only the toolbar button is touched, not the per-row
+    // Clear controls, which are matched by sitting beside History.
+    function lfTodoSteadyClear() {
+        const history = Array.from(document.querySelectorAll('button, a, .btn'))
+            .find(b => b.offsetParent !== null && /^history$/i.test((b.textContent || '').trim()));
+        if (!history || !history.parentElement) return;
+        Array.from(history.parentElement.children).forEach(el => {
+            if (!/^clear\b/i.test((el.textContent || '').replace(/\s+/g, ' ').trim())) return;
+            el.classList.add('lf-clear-steady');
+        });
+    }
+
+    // v100.9.107: the anchor is re-checked every pass and the group is moved if it has
+    // drifted. Before, if "+ Borrower to-do" had not rendered yet the buttons were
+    // dropped beside "Re-Validate with AI" and left there for good, because a guard
+    // saw them already existing and did nothing further.
+    // v100.9.108: falls back to the toolbar itself. If the to-do button has not
+    // rendered yet - or is named something this does not recognise - the group used to
+    // be skipped entirely and never appeared. Now it is placed at the end of the
+    // toolbar instead, and moved next to the to-do button as soon as that exists.
+    function lfTodoAnchorButton() {
+        const buttons = Array.from(document.querySelectorAll('button, a, .btn'))
+            .filter(b => b.offsetParent !== null);
+        const text = (b) => (b.textContent || '').replace(/\s+/g, ' ').trim();
+        return buttons.find(b => /^\+?\s*(borrower|escrow|closing agent|loan owner)s?\s+to-?do$/i.test(text(b)))
+            || buttons.find(b => /^\+/.test(text(b)) && /\bto-?do$/i.test(text(b)))
+            || null;
+    }
+
+    function lfTodoToolbar() {
+        const history = Array.from(document.querySelectorAll('button, a, .btn'))
+            .find(b => b.offsetParent !== null && /^history$/i.test((b.textContent || '').trim()));
+        return history ? history.parentElement : null;
+    }
+
+    function lfTodoSelectButtons() {
+        const anchor = lfTodoAnchorButton();
+        const toolbar = lfTodoToolbar();
+        if (!anchor && !toolbar) {
+            if (!window.__lfPicksWarned) {
+                window.__lfPicksWarned = true;
+                console.warn('[LF Optimizer] status buttons not placed: neither a "+ ... to-do" button nor the History toolbar was found.');
+            }
+            return;
+        }
+
+        let picks = document.querySelector('.lf-todo-picks');
+        if (picks) {
+            // already built - keep it on the right of the to-do button
+            if (anchor && anchor.nextElementSibling !== picks) anchor.insertAdjacentElement('afterend', picks);
+            else if (!anchor && picks.parentElement !== toolbar) toolbar.appendChild(picks);
+            return;
+        }
+
+        picks = document.createElement('span');
+        picks.className = 'lf-todo-picks';
+
+        Object.keys(LF_TODO_GROUPS).forEach(key => {
+            const grp = LF_TODO_GROUPS[key];
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'lf-todo-pick';
+            btn.dataset.group = key;
+            btn.dataset.on = '0';
+            btn.innerHTML = LF_PICK_BOX_OFF + '<span class="lf-pick-label">' + grp.label + '</span>';
+
+            btn.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const live = lfTodoTable();
+                if (!live) return;
+                const { total, picked } = lfTodoPickCount(grp);
+                const turnOn = picked < total;
+                let n = 0;
+                lfTodoRows(live).forEach(row => {
+                    if (!grp.match(lfTodoStatusOf(row, live.statusIdx))) return;
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    if (!cb || cb.disabled) return;
+                    if (cb.checked !== turnOn) { cb.click(); n++; }
+                });
+                lfTodoRefreshPicks();
+                showToast((turnOn ? 'Selected ' : 'Unselected ') + n + ' ' + grp.label.toLowerCase() + ' to-do' + (n === 1 ? '' : 's'));
+            });
+            picks.appendChild(btn);
+        });
+
+        if (anchor) anchor.insertAdjacentElement('afterend', picks);
+        else toolbar.appendChild(picks);
+        lfTodoRefreshPicks();
+    }
+
+    function lfTodoSelectTools() {
+        const info = lfTodoTable();
+        if (!info) return;
+        lfTodoRenameStatus(info);
+        lfTodoAddSorting(info);
+        lfTodoSelectButtons();
+        lfTodoSteadyClear();
+        lfTodoRefreshPicks();          // counts follow rows ticked one at a time
+        lfWatchTodoHeader();
+    }
+
+    // ==========================================
+    // TO-DO LIST READABILITY (v100.9.103)
+    //
+    // Five changes, all written so a redraw by the portal simply undoes and redoes
+    // them: no flags are kept, each pass looks at what is on the page right now.
+    // Nothing is removed - the AI panels are hidden, never deleted, and the long file
+    // names are shortened with CSS so the real text stays in the DOM.
+    // ==========================================
+    const LF_ST_CHIPS = [
+        { rx: /submitted\s+to\s+lender/i, cls: 'sub', text: 'Submitted' },
+        { rx: /^requested$/i,             cls: 'req', text: 'Requested' },
+        { rx: /^received$/i,              cls: 'rec', text: 'Received' }
+    ];
+
+    // ---------- 1. the status reads as a chip, not three lines of prose ----------
+    function lfTodoStatusChips(info) {
+        // v100.9.104: a row can hold two statuses at once ("Requested Submitted To
+        // Lender"). Each one gets its own chip rather than the first match winning.
+        const SCAN = [
+            { rx: /submitted\s+to\s+lender/ig, cls: 'sub', text: 'Submitted' },
+            { rx: /requested/ig,                cls: 'req', text: 'Requested' },
+            { rx: /received/ig,                 cls: 'rec', text: 'Received' }
+        ];
+        lfTodoRows(info).forEach(row => {
+            const cell = row.cells[info.statusIdx];
+            if (!cell) return;
+            Array.from(cell.childNodes).forEach(n => {
+                if (n.nodeType !== 3) return;
+                const raw = (n.nodeValue || '').replace(/\s+/g, ' ').trim();
+                if (!raw) return;
+
+                const found = [];
+                let rest = raw;
+                SCAN.forEach(def => {
+                    def.rx.lastIndex = 0;
+                    if (!def.rx.test(rest)) return;
+                    found.push(def);
+                    rest = rest.replace(new RegExp(def.rx.source, 'i'), ' ');
+                });
+                if (!found.length) return;
+
+                const frag = document.createDocumentFragment();
+                found.forEach(def => {
+                    const chip = document.createElement('span');
+                    chip.className = 'lf-st-chip lf-st-' + def.cls;
+                    chip.textContent = def.text;
+                    chip.title = raw;
+                    frag.appendChild(chip);
+                });
+                const leftover = rest.replace(/\s+/g, ' ').trim();
+                if (leftover) frag.appendChild(document.createTextNode(' ' + leftover));
+                n.parentNode.replaceChild(frag, n);
+            });
+        });
+    }
+
+    // ---------- 2. the AI panel folds away ----------
+    function lfTodoFoldAI() {
+        const HEAD_RX = /^ai:\s*(review required|eligible for clearance)/i;
+        document.querySelectorAll('div, p, span, strong, b, h4, h5').forEach(el => {
+            if (el.children.length) return;
+            const label = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!HEAD_RX.test(label)) return;
+
+            // the panel is the nearest ancestor that holds more than just this heading
+            let panel = el.parentElement;
+            for (let i = 0; i < 3 && panel; i++) {
+                if (panel.childElementCount > 1) break;
+                panel = panel.parentElement;
+            }
+            if (!panel || panel.dataset.lfAiFold === '1') return;
+            panel.dataset.lfAiFold = '1';
+            panel.classList.add('lf-ai-panel');
+
+            const headRow = el.closest(':scope > *') || el;
+            Array.from(panel.children).forEach(ch => {
+                if (ch === headRow || ch.contains(el)) return;
+                ch.classList.add('lf-ai-body');
+            });
+
+            const caret = document.createElement('span');
+            caret.className = 'lf-ai-caret';
+            caret.textContent = '\u25be';
+            el.appendChild(caret);
+
+            panel.classList.add('lf-ai-closed');
+            panel.addEventListener('click', (e) => {
+                if (e.target.closest('button, a')) return;      // Like / Dislike still work
+                e.stopPropagation();
+                panel.classList.toggle('lf-ai-closed');
+            });
+        });
+    }
+
+    // ---------- 3. shorter timestamps ----------
+    function lfTodoTrimDates(info) {
+        const idxs = ['created', 'updated']
+            .map(name => info.cells.indexOf(name))
+            .filter(i => i > -1);
+        if (!idxs.length) return;
+
+        // v100.9.107: rewritten as a search-and-replace inside the text rather than a
+        // whole-cell match. The portal redraws these cells constantly and the text
+        // rarely came back byte-identical, so the seconds kept reappearing.
+        const RX = /(\d{1,2}\/\d{1,2}\/)(\d{2})(\d{2})(,?\s+\d{1,2}:\d{2}):\d{2}(\s*)([AP]M)/gi;
+
+        lfTodoRows(info).forEach(row => {
+            idxs.forEach(i => {
+                const cell = row.cells[i];
+                if (!cell) return;
+                const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null);
+                const nodes = [];
+                while (walker.nextNode()) nodes.push(walker.currentNode);
+                nodes.forEach(n => {
+                    const before = n.nodeValue;
+                    if (!before || before.indexOf(':') < 0) return;
+                    const after = before.replace(RX, '$1$3$4 $6').replace(/,\s+/g, ' ');
+                    if (after !== before) n.nodeValue = after;
+                });
+                cell.classList.add('lf-todo-date');
+            });
+        });
+    }
+
+    function lfTodoReadability() {
+        const info = lfTodoTable();
+        if (!info) return;
+        lfTodoStatusChips(info);
+        lfTodoTrimDates(info);
+        lfTodoFoldAI();
+        info.table.classList.add('lf-todo-table');
+
+        // the full file name lives in the tooltip, since the visible text is clipped
+        info.table.querySelectorAll('td a').forEach(a => {
+            const full = (a.textContent || '').replace(/\s+/g, ' ').trim();
+            if (full && a.title !== full) a.title = full;
+        });
+    }
+
+    // ==========================================
+    // COLUMN ORDER, DRAGGED AND REMEMBERED (v100.9.104)
+    //
+    // Headings can be dragged to reorder the table, and the order is kept in
+    // localStorage so every loan opens the same way. It travels with Export Settings,
+    // which already collects every lf_* key.
+    //
+    // The first column is left where it is - it holds the select box, and a list you
+    // cannot reliably tick is worse than one with the columns in the wrong order.
+    // ==========================================
+    const LF_COLS_KEY = 'lf_todo_col_order';
+
+    const lfColLabel = (cell) => (cell.textContent || '')
+        .replace(/[\u21c5\u2191\u2193]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+    function lfColSavedOrder() {
+        try {
+            const raw = localStorage.getItem(LF_COLS_KEY);
+            const arr = raw ? JSON.parse(raw) : null;
+            return Array.isArray(arr) && arr.length ? arr : null;
+        } catch (e) { return null; }
+    }
+
+    function lfColSaveOrder(info) {
+        const order = Array.from(info.head.cells).slice(1).map(lfColLabel);
+        try { localStorage.setItem(LF_COLS_KEY, JSON.stringify(order)); } catch (e) {}
+    }
+
+    // Applies the saved order to the header and to every row, by moving whole cells.
+    function lfColApplyOrder(info) {
+        const want = lfColSavedOrder();
+        if (!want) return;
+
+        const current = Array.from(info.head.cells).slice(1).map(lfColLabel);
+        if (current.join('|') === want.join('|')) return;            // already in order
+        if (current.length !== want.length) return;                   // a different table
+        if (new Set(current).size !== current.length) return;         // duplicate headings
+        if (!want.every(l => current.includes(l))) return;            // headings changed
+
+        // v100.9.107: every row must have the same shape as the header, or nothing is
+        // moved at all. Previously each row was checked on its own and the ones that
+        // did not match were skipped - the header and some rows moved while the rest
+        // stayed, which is what scrambled the table.
+        const rows = Array.from(info.table.rows);
+        const width = info.head.cells.length;
+        const movable = rows.filter(r => r.cells.length === width);
+        if (movable.length !== rows.length) {
+            const odd = rows.length - movable.length;
+            console.warn('[LF Optimizer] column order not applied: ' + odd + ' row(s) have a different number of cells.');
+            return;
+        }
+
+        const target = want.map(l => current.indexOf(l));
+
+        movable.forEach(row => {
+            const rest = Array.from(row.cells).slice(1);              // snapshot before moving
+            target.forEach(from => row.appendChild(rest[from]));      // appendChild moves
+        });
+    }
+
+    function lfColEnableDrag(info) {
+        Array.from(info.head.cells).forEach((cell, idx) => {
+            if (idx === 0) return;                                  // the select column stays
+            if (cell.dataset.lfColDrag === '1') return;
+            cell.dataset.lfColDrag = '1';
+            cell.draggable = true;
+            cell.classList.add('lf-col-draggable');
+
+            cell.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', lfColLabel(cell));
+                cell.classList.add('lf-col-dragging');
+            });
+            cell.addEventListener('dragend', () => {
+                cell.classList.remove('lf-col-dragging');
+                info.head.querySelectorAll('.lf-col-over').forEach(c => c.classList.remove('lf-col-over'));
+            });
+            cell.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                cell.classList.add('lf-col-over');
+            });
+            cell.addEventListener('dragleave', () => cell.classList.remove('lf-col-over'));
+
+            cell.addEventListener('drop', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                cell.classList.remove('lf-col-over');
+                const moved = e.dataTransfer.getData('text/plain');
+                if (!moved) return;
+
+                const live = lfTodoTable();
+                if (!live) return;
+                const labels = Array.from(live.head.cells).slice(1).map(lfColLabel);
+                const from = labels.indexOf(moved);
+                const to = labels.indexOf(lfColLabel(cell));
+                if (from < 0 || to < 0 || from === to) return;
+
+                labels.splice(to, 0, labels.splice(from, 1)[0]);
+                try { localStorage.setItem(LF_COLS_KEY, JSON.stringify(labels)); } catch (err) {}
+                lfColApplyOrder(live);
+                showToast('Column order saved');
+            });
+        });
+    }
+
+    function lfTodoColumns() {
+        const info = lfTodoTable();
+        if (!info) return;
+        lfColApplyOrder(info);
+        lfColEnableDrag(info);
+    }
+
+    // ==========================================
     // SLA DATE & TIME LOGIC
     // ==========================================
     function addBusinessHours(startDate, hoursToAdd) {
@@ -5362,7 +6088,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.97</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.109</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -6273,13 +6999,21 @@
                     const empIdx = headersText.findIndex(h => ['employer or business name', 'company name', 'employer name', 'employer'].includes(h));
                     const borrowerIdx = headersText.findIndex(h => h.includes('borrower') || h === 'name');
 
+                    // v100.9.101: the to-do list is not a pipeline. Its status column
+                    // used to be called "Action", so this colourer skipped it and the
+                    // portal's own yellow/green rows showed through. Renaming that
+                    // column to "Status" made it match here, and every row was painted
+                    // lf-row-new - a white background with !important - wiping the
+                    // portal's colours. The table is marked and skipped explicitly.
+                    const isTodo = table.dataset.lfTodoTable === '1';
+
                     const rows = table.querySelectorAll('tbody tr, tr');
                     rows.forEach(row => {
                         if (row.querySelector('th') || row.closest('thead')) return;
                         const tds = row.children;
 
                         // Pipeline Colors
-                        if (statusIdx > -1 && tds[statusIdx]) {
+                        if (!isTodo && statusIdx > -1 && tds[statusIdx]) {
                             let statusText = tds[statusIdx].textContent || '';
                             tds[statusIdx].querySelectorAll('select').forEach(sel => { if(sel.options[sel.selectedIndex]) statusText += ' ' + sel.options[sel.selectedIndex].text; });
                             statusText = statusText.toLowerCase();
@@ -6572,6 +7306,9 @@
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
             try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
             try { lfWatchDropZones(); } catch (err) {}               // v100.9.97
+            try { lfTodoSelectTools(); } catch (err) {}              // v100.9.98
+            try { lfTodoReadability(); } catch (err) {}              // v100.9.103
+            try { lfTodoColumns(); } catch (err) {}                  // v100.9.104
             try { lfApplyAllLoanOwners(); } catch (err) {}           // v100.9.73
             try { lfBiggerCheckboxes(); } catch (err) {}             // v100.9.90
             try { lfGsSync(); } catch (err) {}                       // v100.9.42
