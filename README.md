@@ -1,11 +1,11 @@
 # Loan Factory Optimizer
 
-![Version](https://img.shields.io/badge/version-100.9.110-blue)
+![Version](https://img.shields.io/badge/version-100.9.162-blue)
 ![Userscript](https://img.shields.io/badge/type-userscript-orange)
 ![Tampermonkey](https://img.shields.io/badge/requires-Tampermonkey-00485B)
 ![Browsers](https://img.shields.io/badge/browsers-Firefox%20%7C%20Chrome%20%7C%20Edge-brightgreen)
 
-A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, calculated LTV, reusable email templates, bulk to-do selection, drag-and-drop uploads, and keyboard search.
+A Tampermonkey userscript that streamlines day-to-day work in the Loan Factory portal — turn-time tracking, calculated LTV, reusable email templates, a scrolling date picker, bulk to-do selection, drag-and-drop uploads, and keyboard search.
 
 > **Personal project.** Not affiliated with, endorsed by, or supported by Loan Factory. Use at your own risk.
 
@@ -50,7 +50,6 @@ Pick the store that matches your browser:
 | **Chrome** | [Chrome Web Store](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) |
 | **Edge** | [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) |
 
-
 **Using Firefox? Skip to [Step 3](#step-3--install-the-script).** Step 2 applies only to Chrome and Edge.
 
 ---
@@ -71,12 +70,11 @@ Chrome and Edge require an extra permission before Tampermonkey is allowed to ru
 
 <img width="1533" height="701" alt="image" src="https://github.com/user-attachments/assets/30a8eef6-1c70-4a2f-8d2a-9b5f9cf896a9" />
 
-
 **2.3** Find Tampermonkey and click **Details**
 
 <img width="553" height="429" alt="image" src="https://github.com/user-attachments/assets/d9c36649-bb21-4317-ae6e-d9cba45d0376" />
 
-**2.4** Turn on **Allow User Scripts** & Pin to toolbar, and Set **Site access** to **On all sites**
+**2.4** Turn on **Allow User Scripts** & Pin to toolbar, and set **Site access** to **On all sites**
 
 <img width="901" height="409" alt="image" src="https://github.com/user-attachments/assets/4d63b72a-3032-407f-93a6-1d03c41ce28c" />
 
@@ -110,11 +108,10 @@ Open Loan Factory and go to your pipeline. You should see:
 
 <img width="878" height="177" alt="image" src="https://github.com/user-attachments/assets/0d38ddcb-9946-44d6-9213-d330e13860e5" />
 
-
 To confirm precisely, press **F12** to open the browser console. You should see:
 
 ```
-[LF Optimizer] v100.9.110 loaded
+[LF Optimizer] v100.9.162 loaded
 ```
 
 <img width="995" height="386" alt="image" src="https://github.com/user-attachments/assets/c4f127d9-1741-45bb-bc57-e3f450e3ac8d" />
@@ -141,6 +138,30 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 
 <img width="338" height="940" alt="image" src="https://github.com/user-attachments/assets/6df15e74-6289-4e96-b358-727a2a48de54" />
 
+### Date picker
+
+Every date field in a dialog — Wakeup date on a follow-up flag, Funded Date on Update Loan — gets a calendar built for picking quickly.
+
+| Feature | What it does |
+|---|---|
+| **Scrolling months** | Months run in one continuous column; more are added as you reach either end |
+| **Shortcuts** | One row of hops above the field, each showing where it lands |
+| **Holiday marking** | US federal holidays are red, and each month lists its holidays under the caption |
+| **Holiday notice** | Picking one drops a banner from the top of the screen naming it — once per date |
+| **Time of day** | Hour, minute and an AM/PM toggle; defaults to 12:00 PM |
+| **Weekend shading** | Saturday and Sunday columns sit on a faint band |
+
+The shortcuts count **business days**, skipping weekends:
+
+| Shortcut | Lands on |
+|---|---|
+| Next day · +2 days · +3 days | 1–3 working days out, weekday shown |
+| +1 wk · +2 wks · +1 mth | 7, 14 days and 1 month out, date shown |
+| Today | Only on fields other than Wakeup date |
+
+> **Holidays are marked, not avoided.** A follow-up on Columbus Day is sometimes exactly what's wanted, so the shortcuts will land on one and tell you — the choice stays yours.
+
+The portal's own calendar is taken off screen so there is only ever one picker, and the date is set through the portal's own component so it saves correctly on submit.
 
 ### To-do lists
 
@@ -153,7 +174,6 @@ Everything is configured from the **palette icon** in the Loan Factory top bar.
 | **Status chips** | Requested, Submitted and Received read as coloured chips instead of stacked text |
 | **Bigger tick boxes** | The whole cell is clickable, not just the 13px box |
 | **Folded AI panels** | "AI: Review Required" collapses to one line, click to open |
-| **Folded file lists** | Several uploaded files collapse to "4 files", click to open |
 | **Sticky toolbar & heading** | Both stay in view while a long list scrolls |
 
 The three status buttons match these rules:
@@ -191,7 +211,9 @@ Placeholders available:
 | `{Borrower 1's email address}` | The main borrower's address in the **To** field |
 | `{list of to-do list item(s)}` | The list the portal generated, kept exactly as-is |
 
-**Only the body between "Dear …" and "Sincerely," is replaced.** The logo above it and the signature below it are left as the portal built them. If those markers can't be found, or the to-do list can't be read, nothing is changed.
+**Only the body between the greeting and "Sincerely," is replaced.** The logo above it and the signature below it are left as the portal built them. If those markers can't be found, or the to-do list can't be read, nothing is changed.
+
+A placeholder that resolves to nothing takes its line with it — an escrow loan with no co-borrower leaves no blank gap.
 
 ### Global search
 
@@ -347,6 +369,20 @@ Compare it with the ID on your extensions page. **If they differ, you have two i
 
 If this recurs after every restart, switch to Firefox. It's a Manifest V3 limitation in Chrome and Edge that affects large scripts.
 
+### The date picker didn't appear on a dialog
+
+It only attaches to date fields **inside an open dialog**, by design — a shortcut strip with no dialog to sit in ends up loose on the page. If a dialog has a date field and nothing appears, open the console and run:
+
+```
+lfWake2()
+```
+
+It reports what it found: the field, the calendars on the page, the day cell it would click, and whether clicking changed the value.
+
+### The date saved is not the one I picked
+
+Pick the date again and check the field before submitting. The date is set through the portal's own picker, so the value in the box is what will be saved. If they differ, `lfWake2()` output will show where the chain broke.
+
 ### Column order didn't change when I dragged a heading
 
 The order is only applied when every row has the same number of cells as the heading. If one row differs, nothing is moved — a table with the data out of step with the headings is worse than one in the original order. The console says so when it happens.
@@ -393,6 +429,9 @@ No, as long as you installed from the raw link. Use **Utilities → Check for us
 
 **Why does it stop working after browser updates?**
 Chrome and Edge reset the "Allow User Scripts" permission when they update. Turn it back on and restart the browser. Firefox doesn't have this problem.
+
+**Why do the date shortcuts land on a public holiday?**
+Because skipping it would be deciding for you. They skip weekends, mark the holiday in red, and tell you which one it is — then leave the choice alone.
 
 **Why is the LTV different from the portal's own LTV field?**
 This one is calculated against the appraised value, so it stays correct even when the portal's field is stale or empty.
