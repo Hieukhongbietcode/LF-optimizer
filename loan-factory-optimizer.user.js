@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.109
+// @version      100.9.162
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.109 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.162 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -296,14 +296,25 @@
     // ==========================================
     const LF_HIDDEN_ACTIONS = [/loan\s*officer\s*change\s*request/i];
 
+    // v100.9.140: the scan is marked once per element instead of being redone.
+    //
+    // This walked every a/li/span/div/button on the page every 500ms and read the text
+    // of each - 5.2ms a pass on a full pipeline, spent almost entirely on elements it
+    // had already judged. Elements are now stamped the first time they are examined,
+    // so each one is read once rather than twice a second for as long as the tab is
+    // open. The outcome is identical; only the repetition is gone.
     function lfHideUnwantedActions() {
-        document.querySelectorAll('a, li, span, div, button').forEach(el => {
+        document.querySelectorAll('a:not([data-lf-ac]), li:not([data-lf-ac]), span:not([data-lf-ac]), div:not([data-lf-ac]), button:not([data-lf-ac])').forEach(el => {
+            el.dataset.lfAc = '1';                       // examined - never again
             if (el.dataset.lfActionChecked === '1') return;
+
             const t = (el.textContent || '').trim();
             if (!t || t.length > 60) return;
             if (!LF_HIDDEN_ACTIONS.some(rx => rx.test(t))) return;
+
             // only the innermost element carrying that text
             if (el.querySelector && Array.from(el.querySelectorAll('*')).some(c => LF_HIDDEN_ACTIONS.some(rx => rx.test((c.textContent || '').trim())))) return;
+
             const item = el.closest('li') || el;
             item.dataset.lfActionChecked = '1';
             item.style.setProperty('display', 'none', 'important');
@@ -1445,7 +1456,14 @@
     // v100.9.41: repeating the same message now bumps a counter on the toast that is
     // already showing, instead of stacking four near-identical cards. Copying three
     // fields in a row reads as "Copied: 1234  x3" rather than a wall of toasts.
-    function showToast(message) {
+    // v100.9.159: a warning toast looks different from a confirmation.
+    //
+    // "10/12 is Columbus Day" was arriving in the same green tick as "Selected 3
+    // to-dos" - the one message that needs a second look was the easiest to scroll
+    // past. Amber background, amber exclamation mark.
+    const LF_WARN_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3.5 1.8 21h20.4z"></path><line x1="12" y1="10" x2="12" y2="14.5"></line><line x1="12" y1="17.6" x2="12" y2="17.7"></line></svg>';
+
+    function showToast(message, kind) {
         let stack = document.getElementById('lf-toast-stack');
         if (!stack) {
             stack = document.createElement('div');
@@ -1477,10 +1495,10 @@
         }
 
         const toast = document.createElement('div');
-        toast.className = 'lf-toast2';
+        toast.className = 'lf-toast2' + (kind ? ' lf-toast2-' + kind : '');
         toast.dataset.lfMsg = msg;
         toast.dataset.lfCount = '1';
-        toast.innerHTML = `<span class="lf-toast2-icon">${CHECK_SVG}</span><span class="lf-toast2-msg"></span>`;
+        toast.innerHTML = `<span class="lf-toast2-icon">${kind === 'warn' ? LF_WARN_SVG : CHECK_SVG}</span><span class="lf-toast2-msg"></span>`;
         toast.querySelector('.lf-toast2-msg').textContent = msg;
         stack.appendChild(toast);
 
@@ -2547,6 +2565,301 @@
                 box-sizing: border-box !important;
             }
 
+            .lf-user-hidden { display: none !important; }
+
+            /* v100.9.117: the scrolling wakeup calendar */
+            .lf-wk {
+                margin: 0;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                background: #fff;
+                font-family: inherit;
+                box-shadow: 0 2px 10px rgba(0,0,0,.05);
+                overflow: hidden;
+                max-width: 340px;
+            }
+            .lf-wk-head {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 9px 12px 7px;
+            }
+            .lf-wk-label { font: 700 13px/1.3 inherit; color: #1d1d1f; letter-spacing: -.01em; }
+            .lf-wk-navs { display: flex; align-items: center; gap: 3px; }
+            .lf-wk-nav {
+                min-width: 26px; height: 26px; padding: 0 7px;
+                background: transparent; border: none; border-radius: 7px;
+                font: 600 12px/1 inherit; color: #495057; cursor: pointer;
+            }
+            .lf-wk-nav:hover { background: rgba(0,0,0,.06); color: #d95707; }
+            .lf-wk-today-btn { font-weight: 700; color: #f36f20; }
+
+            .lf-wk-dow {
+                display: grid; grid-template-columns: repeat(7, 1fr);
+                padding: 0 10px 6px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            .lf-wk-dow span {
+                text-align: center;
+                font: 700 10px/1.6 inherit; color: #94a3b8;
+                letter-spacing: .3px;
+            }
+            .lf-wk-dow span.we { color: #cbd5e1; }
+
+            .lf-wk-scroll {
+                max-height: 232px;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                padding: 0 10px 6px;
+                scrollbar-width: thin;
+            }
+            .lf-wk-scroll::-webkit-scrollbar { width: 8px; }
+            .lf-wk-scroll::-webkit-scrollbar-thumb {
+                background: rgba(0,0,0,.16); border-radius: 980px;
+                border: 2px solid transparent; background-clip: content-box;
+            }
+
+            .lf-wk-caption {
+                position: sticky; top: 0; z-index: 1;
+                padding: 7px 2px 4px;
+                background: #fff;
+                font: 700 11px/1.4 inherit; color: #64748b;
+                letter-spacing: .2px;
+            }
+            .lf-wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+            .lf-wk-blank { height: 30px; }
+
+            .lf-wk-day {
+                height: 30px; padding: 0;
+                display: flex; align-items: center; justify-content: center;
+                background: transparent; border: none; border-radius: 8px;
+                font: 500 12.5px/1 inherit; color: #1d1d1f;
+                cursor: pointer; font-variant-numeric: tabular-nums;
+                transition: background .1s ease, color .1s ease;
+            }
+            .lf-wk-day.we { color: #94a3b8; }
+            .lf-wk-day:hover { background: #fff3ea; color: #d95707; }
+            .lf-wk-day.today { box-shadow: inset 0 0 0 1.5px #f36f20; color: #d95707; font-weight: 700; }
+            .lf-wk-day.sel {
+                background: #f36f20 !important; color: #fff !important;
+                font-weight: 700; box-shadow: none;
+            }
+
+
+            /* v100.9.121: AM/PM toggle and the weekday on each jump */
+            .lf-wk-ampm {
+                min-width: 48px; text-align: center;
+                font-weight: 700; color: #d95707;
+            }
+
+            /* v100.9.120: three dropdowns, wrapping if the sheet is narrow */
+            .lf-wk-time { flex-wrap: wrap; }
+
+
+            /* v100.9.144: the shortcuts as one segmented strip, matching the status
+               buttons on the to-do list so the script has a single button style. */
+            .lf-wake-jumps {
+                display: flex;
+                flex-wrap: nowrap;                /* one row, always */
+                overflow-x: auto;                 /* ...and it scrolls rather than clips
+                                                     when a field has one shortcut more
+                                                     than the dialog is wide */
+                scrollbar-width: thin;
+                align-items: stretch;
+                padding: 0;
+                margin: 6px 0 8px;
+                border: 1px solid #d5d8dc;
+                border-radius: 7px;
+                overflow: hidden;
+                background: #fff;
+                width: fit-content;
+                max-width: 100%;
+            }
+            .lf-wake-jump {
+                display: inline-flex;
+                flex-direction: column;           /* label on top, day underneath */
+                align-items: center; justify-content: center; gap: 1px;
+                min-height: 34px; padding: 4px 9px; margin: 0;
+                background: transparent; color: #495057;
+                border: none; border-right: 1px solid #e2e8f0; border-radius: 0;
+                font: 600 11px/1.15 inherit; letter-spacing: 0;
+                cursor: pointer; white-space: nowrap;
+                transition: background .12s ease, color .12s ease;
+            }
+            .lf-wake-jumps::-webkit-scrollbar { height: 5px; }
+            .lf-wake-jumps::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 980px; }
+            .lf-wake-jump { flex: none; }
+            .lf-wake-jump:last-child { border-right: none; }
+            .lf-wake-jump:hover { background: #fff3ea; color: #d95707; }
+            .lf-jump-main { display: block; }
+            .lf-jump-dow {
+                display: block;
+                font-size: 11px; font-weight: 800;
+                color: #f59e0b;                   /* light orange */
+                letter-spacing: .2px;
+                font-variant-numeric: tabular-nums;
+            }
+            .lf-wake-jump:hover .lf-jump-dow { color: #d95707; }
+
+            /* the shortcut that produced the current date */
+            .lf-wake-jump.on {
+                background: #f36f20;
+                color: #fff;
+            }
+            .lf-wake-jump.on .lf-jump-dow { color: rgba(255, 255, 255, .92); }
+            .lf-wake-jump.on:hover { background: #d95707; color: #fff; }
+            .lf-wake-jump.on:hover .lf-jump-dow { color: #fff; }
+
+            /* v100.9.160: the holiday banner - top centre, where nothing else lands */
+            #lf-warn-banner {
+                position: fixed;
+                top: 0; left: 50%;
+                transform: translate(-50%, -120%);
+                z-index: 2147483600;
+                display: flex; align-items: center; gap: 12px;
+                max-width: 92vw;
+                padding: 13px 16px 13px 15px;
+                background: #fef3c7;
+                border: 2px solid #f59e0b;
+                border-top: none;
+                border-radius: 0 0 14px 14px;
+                box-shadow: 0 10px 34px rgba(146, 64, 14, .26);
+                font-family: inherit;
+                cursor: pointer;
+                transition: transform .26s cubic-bezier(.2,.9,.3,1.2), opacity .2s ease;
+                opacity: 0;
+            }
+            #lf-warn-banner.show { transform: translate(-50%, 0); opacity: 1; }
+            #lf-warn-banner.leaving {
+                transform: translate(-50%, -130%) scale(.96);
+                opacity: 0;
+                transition: transform .4s cubic-bezier(.5,0,.75,0), opacity .34s ease-in;
+            }
+            #lf-warn-banner .lf-warn-ico { flex: none; color: #d97706; display: flex; }
+            #lf-warn-banner .lf-warn-text { display: flex; flex-direction: column; gap: 2px; }
+            #lf-warn-banner b {
+                font: 800 14.5px/1.25 inherit; color: #7c2d12; letter-spacing: -.01em;
+            }
+            #lf-warn-banner i {
+                font: 600 11.5px/1.3 inherit; color: #b45309; font-style: normal;
+            }
+            #lf-warn-banner .lf-warn-x {
+                flex: none; margin-left: 4px; padding: 0 4px;
+                background: none; border: none; cursor: pointer;
+                font: 700 19px/1 inherit; color: #b45309; opacity: .7;
+            }
+            #lf-warn-banner .lf-warn-x:hover { opacity: 1; }
+            @media (prefers-reduced-motion: reduce) {
+                #lf-warn-banner { transition: opacity .2s ease; transform: translate(-50%, 0); }
+                #lf-warn-banner.leaving { transform: translate(-50%, 0); opacity: 0; }
+            }
+
+            /* v100.9.159: the warning toast */
+            .lf-toast2.lf-toast2-warn {
+                background: #fffbeb !important;
+                border: 1px solid #fcd34d !important;
+                color: #92400e !important;
+                box-shadow: 0 6px 20px rgba(146, 64, 14, .14) !important;
+            }
+            .lf-toast2.lf-toast2-warn .lf-toast2-icon { color: #f59e0b; }
+            .lf-toast2.lf-toast2-warn .lf-toast2-msg { color: #92400e; font-weight: 700; }
+            .lf-toast2.lf-toast2-warn .lf-toast2-count {
+                background: rgba(146, 64, 14, .14); color: #92400e;
+            }
+
+            /* v100.9.162: the month's holidays, named under its caption */
+            .lf-wk-holnote {
+                display: block;
+                margin-top: 2px;
+                font: 600 9.5px/1.35 inherit;
+                color: #dc2626;
+                letter-spacing: .1px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            /* v100.9.143: the note, the weekend columns and the month dividers */
+            .lf-wk-note {
+                display: flex; align-items: center; gap: 6px;
+                margin: 0 10px; padding: 7px 0 6px;
+                border-top: 1px solid #f1f5f9;
+                font: 600 11px/1.4 inherit; color: #b45309;
+            }
+            .lf-wk-note svg { flex: none; opacity: .85; }
+
+            /* weekend columns sit on a faint band so the week reads at a glance */
+            .lf-wk-day.we, .lf-wk-blank.we { background: rgba(15, 23, 42, .035); border-radius: 8px; }
+            .lf-wk-day.we:hover { background: #fff3ea; }
+            .lf-wk-day.we.sel { background: #f36f20 !important; }
+
+            /* a line between months, so a fast scroll keeps its bearings */
+            .lf-wk-month + .lf-wk-month { border-top: 1px solid #eef2f7; margin-top: 4px; }
+            .lf-wk-caption {
+                background: linear-gradient(#fff 70%, rgba(255,255,255,0)) !important;
+                padding-bottom: 6px !important;
+            }
+
+            /* v100.9.138: parked with a transform, not position:fixed.
+               A fixed element reports offsetParent === null for itself and everything
+               inside it, and the day-cell filter needs offsetParent - so the old rule
+               made the calendar impossible to read or click. A transform moves it out
+               of sight without changing that. */
+            .lf-sys-cal-parked {
+                transform: translate(-10000px, 0) !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+
+            /* v100.9.118: the sheet floats, centred on its field, and fades */
+            .lf-wk-pop {
+                position: fixed;
+                z-index: 2147483000;
+                width: 320px;
+                opacity: 0;
+                transform: translateY(-6px) scale(.985);
+                transition: opacity .15s ease, transform .15s ease;
+                pointer-events: none;
+            }
+            .lf-wk-pop.open { opacity: 1; transform: none; pointer-events: auto; }
+
+            /* holidays */
+            .lf-wk-day.hol { color: #dc2626; font-weight: 700; }
+            .lf-wk-day.hol::after {
+                content: ''; position: absolute; margin-top: 17px;
+                width: 3px; height: 3px; border-radius: 50%; background: #dc2626;
+            }
+            .lf-wk-day { position: relative; }
+            .lf-wk-day.hol:hover { background: #fee2e2; color: #b91c1c; }
+            .lf-wk-day.sel.hol { color: #fff !important; }
+            .lf-wk-day.sel.hol::after { background: rgba(255,255,255,.85); }
+
+            /* time of day */
+            .lf-wk-time {
+                display: flex; align-items: center; gap: 6px;
+                padding: 9px 10px 4px;
+                border-top: 1px solid #f1f5f9;
+            }
+            .lf-wk-time-label {
+                font: 700 11px/1.4 inherit; color: #64748b;
+                letter-spacing: .2px; margin-right: 2px;
+            }
+            .lf-wk-sel {
+                height: 27px; padding: 0 4px; min-width: 56px;
+                border: 1px solid #d5d8dc; border-radius: 7px;
+                background: #fff; color: #1d1d1f;
+                font: 600 12px/1 inherit; cursor: pointer;
+            }
+            .lf-wk-sel:hover { border-color: #f36f20; }
+
+            /* v100.9.110: the toolbar follows the list down the page */
+            .lf-todo-toolbar-sticky {
+                position: sticky !important;
+                top: 0;
+                z-index: 6;
+                background: #fff;
+                box-shadow: 0 1px 0 rgba(0, 0, 0, .08);
+            }
+
             /* v100.9.104: draggable column headings */
             th.lf-col-draggable { cursor: grab; }
             th.lf-col-draggable:active { cursor: grabbing; }
@@ -2589,7 +2902,7 @@
             table.lf-todo-table thead th,
             table.lf-todo-table tr:first-child th {
                 position: sticky;
-                top: 0;
+                top: var(--lf-todo-head-top, 0px);
                 z-index: 3;
                 background: #fff;
                 box-shadow: inset 0 -1px 0 #e2e8f0;
@@ -3876,7 +4189,16 @@
                     return;
                 }
             }
-        }).observe(document.body, { childList: true, subtree: true });
+        }).observe(document.body, {
+            childList: true,
+            subtree: true,
+            // v100.9.134: the portal's calendar is built once and then shown by
+            // flipping its style. Watching only for added nodes missed that moment, so
+            // it appeared on screen and stayed until the next 250ms sweep - which is
+            // the flash of two calendars at once.
+            attributes: true,
+            attributeFilter: ['style', 'class', 'hidden']
+        });
     }
 
     function lfInjectTodoDropZones() {
@@ -5290,6 +5612,7 @@
             e.preventDefault();
             e.stopPropagation();
             cb.click();                                             // ticks and unticks alike
+            try { lfTodoCacheClear(); lfTodoRefreshPicks(); } catch (err) {}
         }, true);
     }
 
@@ -5313,6 +5636,30 @@
     // icon read as a plain orange-on-white square.
     const LF_PICK_BOX_ON = '<svg class="lf-pick-ico lf-pick-ico-on" viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"></rect><polyline class="lf-pick-check" points="7.5 12.2 10.8 15.5 16.5 8.8" fill="none" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
 
+    // ==========================================
+    // PER-TICK CACHE FOR THE TO-DO TABLE (v100.9.140)
+    //
+    // lfTodoTable walks every table on the page and lfTodoRows walks every row of it,
+    // checking visibility as it goes. Measured on a 120-row list: 0.5ms and 5.4ms.
+    // Neither is expensive once - but the loop called them nine times every 500ms,
+    // once per feature and three more times for the three status buttons, which came
+    // to roughly 29ms of repeated work per tick for an answer that cannot change
+    // during a tick.
+    //
+    // The result is remembered for the current pass and dropped at the start of the
+    // next one, and whenever the page changes. Nothing else about the behaviour moves:
+    // every caller still sees exactly what a fresh scan would return.
+    // ==========================================
+    let lfTodoTableCache = null;
+    let lfTodoRowsCache = null;
+    let lfTodoRowsOwner = null;
+
+    function lfTodoCacheClear() {
+        lfTodoTableCache = null;
+        lfTodoRowsCache = null;
+        lfTodoRowsOwner = null;
+    }
+
     const LF_TODO_GROUPS = {
         created:   { label: 'Created',   match: (st) => st === '' },
         // v100.9.101: "Requested" means only Requested. A to-do that is Requested AND
@@ -5324,6 +5671,8 @@
     // The header row is the one carrying "Description" - not simply the table's first
     // row, which on this page can be a filter row.
     function lfTodoTable() {
+        if (lfTodoTableCache && lfTodoTableCache.table.isConnected) return lfTodoTableCache;
+
         for (const table of document.querySelectorAll('table')) {
             for (const row of Array.from(table.rows).slice(0, 4)) {
                 const cells = Array.from(row.cells || []).map(c => (c.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase());
@@ -5336,7 +5685,8 @@
                     table.querySelectorAll('tr.lf-row-new, tr.lf-row-green, tr.lf-row-yellow, tr.lf-row-blue, tr.lf-row-red, tr.lf-row-purple')
                         .forEach(r => r.classList.remove('lf-row-new', 'lf-row-green', 'lf-row-yellow', 'lf-row-blue', 'lf-row-red', 'lf-row-purple'));
                 }
-                return { table, head: row, cells, statusIdx };
+                lfTodoTableCache = { table, head: row, cells, statusIdx };
+                return lfTodoTableCache;
             }
         }
         return null;
@@ -5345,11 +5695,15 @@
     // Only rows that are actually on screen - the Completed tab's rows stay hidden in
     // the DOM, and selecting those was never wanted.
     function lfTodoRows(info) {
-        return Array.from(info.table.rows).filter(r =>
+        if (lfTodoRowsCache && lfTodoRowsOwner === info.table) return lfTodoRowsCache;
+
+        lfTodoRowsOwner = info.table;
+        lfTodoRowsCache = Array.from(info.table.rows).filter(r =>
             r !== info.head &&
             r.cells.length > info.statusIdx &&
             r.querySelector('input[type="checkbox"]') &&
             r.offsetParent !== null);
+        return lfTodoRowsCache;
     }
 
     // v100.9.100: the status is read from the text the user can actually see.
@@ -5429,6 +5783,7 @@
             queued = true;
             requestAnimationFrame(() => {
                 queued = false;
+                try { lfTodoCacheClear(); } catch (e) {}   // v100.9.140
                 // v100.9.108: the readability pass runs here too, so a redrawn cell has
                 // its seconds taken off within a frame instead of showing them until
                 // the next sweep of the 500ms loop.
@@ -5776,11 +6131,35 @@
         });
     }
 
+    // v100.9.110: the toolbar sticks to the top with the table heading.
+    //
+    // The heading row already stays put while the list scrolls, but History, Clear and
+    // the three status buttons did not - and those are exactly what gets reached for
+    // halfway down a long list. The table heading sits at 0 and the toolbar above it,
+    // so the two stack instead of overlapping.
+    function lfTodoStickyToolbar() {
+        const bar = lfTodoToolbar();
+        if (!bar || bar.classList.contains('lf-todo-toolbar-sticky')) return;
+
+        // only worth doing when the bar sits directly above the table
+        const info = lfTodoTable();
+        if (!info) return;
+        if (!bar.parentElement || !bar.parentElement.contains(info.table)) return;
+
+        bar.classList.add('lf-todo-toolbar-sticky');
+
+        // the heading row is pushed down by the height of the bar so neither hides
+        // the other as the list scrolls under them
+        const h = Math.round(bar.getBoundingClientRect().height) || 0;
+        if (h) info.table.style.setProperty('--lf-todo-head-top', h + 'px');
+    }
+
     function lfTodoReadability() {
         const info = lfTodoTable();
         if (!info) return;
         lfTodoStatusChips(info);
         lfTodoTrimDates(info);
+        lfTodoStickyToolbar();
         lfTodoFoldAI();
         info.table.classList.add('lf-todo-table');
 
@@ -5901,6 +6280,1633 @@
         if (!info) return;
         lfColApplyOrder(info);
         lfColEnableDrag(info);
+    }
+
+    // ==========================================
+    // PRIVACY TOGGLE (v100.9.111)
+    //
+    // Shift+\ ("|") hides the signed-in name and avatar in the top bar. The element is
+    // set to display:none rather than made invisible, so the controls to its left slide
+    // across and the gap closes as if it had never been there.
+    //
+    // Not listed anywhere in the interface. The choice is remembered per browser.
+    // ==========================================
+    const LF_HIDE_USER_KEY = 'lf_hide_user';
+
+    function lfFindUserChip() {
+        // the top bar's right-hand item: carries an avatar image and a short name,
+        // and sits further right than anything else that does
+        const wide = window.innerWidth || 1200;
+        let best = null, bestX = -1;
+
+        Array.from(document.querySelectorAll('a, div, span, li, button')).forEach(el => {
+            if (!el.offsetParent) return;
+            const r = el.getBoundingClientRect();
+            if (r.top > 120 || r.width > 420 || r.width < 40 || r.height > 90) return;   // top bar only
+            if (r.right < wide * 0.55) return;                                           // right-hand side
+            if (!el.querySelector('img')) return;                                        // has an avatar
+            if (el.querySelector('table, input, textarea')) return;
+            const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!txt || txt.length > 40 || /\d/.test(txt)) return;                        // a person's name
+            if (el.querySelectorAll('img').length > 2) return;
+            if (r.right > bestX) { bestX = r.right; best = el; }
+        });
+        return best;
+    }
+
+    function lfApplyHideUser() {
+        const on = localStorage.getItem(LF_HIDE_USER_KEY) === 'true';
+
+        if (!on) {
+            document.querySelectorAll('.lf-user-hidden').forEach(el => el.classList.remove('lf-user-hidden'));
+            return;
+        }
+
+        // v100.9.112: once something is hidden, leave it alone.
+        //
+        // The previous version re-ran the search every pass and dropped the class when
+        // the search came back empty - which it always did, because the element it was
+        // looking for had just been given display:none and so was no longer findable.
+        // Hide, un-hide, hide: the name blinked twice a second.
+        if (document.querySelector('.lf-user-hidden')) return;
+
+        const chip = lfFindUserChip();
+        if (chip) chip.classList.add('lf-user-hidden');
+    }
+
+    function lfInitHideUser() {
+        if (document.documentElement.dataset.lfHideUserInit === '1') return;
+        document.documentElement.dataset.lfHideUserInit = '1';
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== '|') return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const t = e.target;
+            if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+
+            e.preventDefault();
+            const next = localStorage.getItem(LF_HIDE_USER_KEY) !== 'true';
+            localStorage.setItem(LF_HIDE_USER_KEY, next);
+            lfApplyHideUser();
+        }, true);
+    }
+
+    // ==========================================
+    // WAKEUP DATE PICKER, MADE USABLE (v100.9.113)
+    //
+    // The portal's follow-up calendar offers two small arrows and nothing else: no
+    // scrolling, no way to jump a few weeks out, and one month per click is slow when
+    // the follow-up is six weeks away.
+    //
+    // The portal's calendar is driven, never replaced. A jump works by pressing its own
+    // arrows the right number of times and then clicking the day cell, so the value
+    // that lands in the field is produced by the portal in whatever format it expects.
+    //
+    // Named lfWake* throughout: the script already has an lfCal/LF_CAL family for the
+    // disclose-due calendar on the escalation desk, and the two must not collide.
+    // ==========================================
+    const LF_WAKE_MONTHS = ['january','february','march','april','may','june',
+                            'july','august','september','october','november','december'];
+
+    const LF_WAKE_DOW = ['sun','mon','tue','wed','thu','fri','sat'];
+
+    // v100.9.113: the title is matched against real month names. A looser pattern -
+    // any capitalised word followed by four digits - also matched "Sat 1234" inside
+    // the day grid, so the <table> was mistaken for the element holding the title and
+    // nothing could tell which month was on screen.
+    const LF_WAKE_TITLE_RX = new RegExp('(' + LF_WAKE_MONTHS.join('|') + ')\\.?\\s+(\\d{4})', 'i');
+
+    // v100.9.114: day cells are found by what they contain, not by tag or class name.
+    // This calendar renders them as <div class="react-datepicker__day--015"> - not a
+    // <td> and not a bare .day - so the old selector counted zero cells and the whole
+    // calendar was skipped.
+    function lfWakeDayNodes(el) {
+        return Array.from(el.querySelectorAll('td, div, span, a, button, li'))
+            .filter(c => c.children.length === 0 && /^\d{1,2}$/.test((c.textContent || '').trim()));
+    }
+
+    function lfWakeWeekdayCount(el) {
+        let n = 0;
+        el.querySelectorAll('th, td, div, span, abbr').forEach(c => {
+            if (c.children.length) return;
+            const t = (c.textContent || '').replace(/\s+/g, '').toLowerCase().slice(0, 3);
+            if (LF_WAKE_DOW.indexOf(t) > -1) n++;
+        });
+        return n;
+    }
+
+    function lfWakeCalFind() {
+        for (const el of document.querySelectorAll('div, table, section')) {
+            if (!el.offsetParent) continue;
+            if (el.closest('#lf-color-panel, .lf-et-modal, .lf-dd-cal')) continue;   // ours, not the portal's
+            // v100.9.113: the weekday row is found as separate cells. Testing the
+            // whole string for \bSun\b fails whenever the markup has no whitespace
+            // between cells - the text arrives as "2026SunMon1" and nothing matches.
+            if (lfWakeWeekdayCount(el) < 5) continue;
+            const txt = (el.textContent || '').replace(/\s+/g, ' ');
+            const m = txt.match(LF_WAKE_TITLE_RX);
+            if (!m || LF_WAKE_MONTHS.indexOf(m[1].toLowerCase()) < 0) continue;
+            if (lfWakeDayNodes(el).length < 20) continue;
+
+            // v100.9.113: narrowing stops at the smallest element that still has BOTH
+            // the weekday row and the month title. Without the second test it could
+            // settle on the <table>, which holds the days but not the month - and then
+            // nothing could work out which month was on screen.
+            let best = el;
+            el.querySelectorAll('div, table').forEach(inner => {
+                if (!inner.offsetParent) return;
+                const t2 = (inner.textContent || '').replace(/\s+/g, ' ');
+                if (!LF_WAKE_TITLE_RX.test(t2)) return;
+                if (lfWakeWeekdayCount(inner) < 5) return;
+                if (lfWakeDayNodes(inner).length < 20) return;
+                if (inner.contains(best)) return;
+                if (best.contains(inner)) best = inner;
+            });
+            const okText = (best.textContent || '').replace(/\s+/g, ' ');
+            if (!LF_WAKE_TITLE_RX.test(okText) || lfWakeWeekdayCount(best) < 5) best = el;
+            return best;
+        }
+        return null;
+    }
+
+    // v100.9.139: flatpickr keeps the year in an <input>, so it never appears in
+    // textContent - the text match could not find "October 2026" and returned null.
+    // With no month readable the picker gave up before clicking anything. Both header
+    // layouts are read directly: a month <select>, or a .cur-month label.
+    function lfWakeShownMonth(root) {
+        const yInp = root.querySelector('input.cur-year, .numInput.cur-year, .flatpickr-current-month input');
+        if (yInp) {
+            const y = parseInt(yInp.value, 10);
+            if (!isNaN(y)) {
+                const mSel = root.querySelector('select.flatpickr-monthDropdown-months');
+                if (mSel) return { month: mSel.selectedIndex, year: y };
+
+                const mSpan = root.querySelector('.cur-month, .flatpickr-current-month');
+                if (mSpan) {
+                    const name = (mSpan.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    const idx = LF_WAKE_MONTHS.findIndex(mm => name.indexOf(mm) === 0);
+                    if (idx > -1) return { month: idx, year: y };
+                }
+            }
+        }
+
+        const m = (root.textContent || '').replace(/\s+/g, ' ').match(LF_WAKE_TITLE_RX);
+        if (!m) return null;
+        const idx = LF_WAKE_MONTHS.indexOf(m[1].toLowerCase().replace('.', ''));
+        if (idx < 0) return null;
+        return { month: idx, year: parseInt(m[2], 10) };
+    }
+
+    // v100.9.139: arrows may wrap an icon and may sit in a parked calendar.
+    //
+    // The version that survived in the file required a childless element with a visible
+    // offsetParent. flatpickr's arrows contain an <svg>, and a parked calendar reports
+    // no offsetParent - so both were rejected and the month could never be changed.
+    function lfWakeArrows(root) {
+        const parked = root.closest && root.closest('.lf-sys-cal-parked');
+        const cls = (el) => String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className || '');
+        const txt = (el) => (el.textContent || '').replace(/\s+/g, '').trim();
+        const cands = Array.from(root.querySelectorAll('a, button, span, div, th, i'))
+            .filter(el => parked || el.offsetParent);
+
+        const pick = (rxCls, rxTxt) =>
+            cands.find(el => rxCls.test(cls(el)) || rxCls.test(el.getAttribute('aria-label') || '')) ||
+            cands.find(el => el.children.length === 0 && rxTxt.test(txt(el)));
+
+        return {
+            prev: root.querySelector('.flatpickr-prev-month') ||
+                  pick(/prev|previous|back/i, /^[\u2039\u2190\u00ab<]$/),
+            next: root.querySelector('.flatpickr-next-month') ||
+                  pick(/next|forward/i, /^[\u203a\u2192\u00bb>]$/)
+        };
+    }
+
+    // day cells of the month on show, not the greyed ones from the months either side
+    function lfWakeDayCells(root) {
+        const parked = root.closest && root.closest('.lf-sys-cal-parked');
+        return lfWakeDayNodes(root).filter(c => {
+            if (!parked && !c.offsetParent) return false;
+            const k = String(c.className && c.className.baseVal !== undefined ? c.className.baseVal : c.className || '').toLowerCase();
+            if (/other|old|new|outside|disabled|muted|excluded|off\b/.test(k)) return false;
+            if (/prevmonthday|nextmonthday/.test(k)) return false;      // flatpickr
+            // v100.9.133: only the cell's own fading counts. A parked calendar is
+            // deliberately out of sight, and its cells must still be selectable.
+            if (!c.closest('.lf-sys-cal-parked')) {
+                const cs = typeof getComputedStyle === 'function' ? getComputedStyle(c) : null;
+                if (cs && parseFloat(cs.opacity) < 0.6) return false;
+            }
+            return true;
+        });
+    }
+
+    function lfWakeGoto(root, target) {
+        const arrows = lfWakeArrows(root);
+        for (let step = 0; step < 36; step++) {
+            const shown = lfWakeShownMonth(root);
+            if (!shown) return false;
+            const diff = (target.getFullYear() - shown.year) * 12 + (target.getMonth() - shown.month);
+            if (diff === 0) break;
+            const btn = diff > 0 ? arrows.next : arrows.prev;
+            if (!btn) return false;
+            btn.click();
+        }
+        const day = String(target.getDate());
+        const cell = lfWakeDayCells(root).find(c => (c.textContent || '').trim() === day);
+        if (!cell) return false;
+        cell.click();
+        return true;
+    }
+
+    // v100.9.118: the short hops count business days - three days out means three
+    // working days out, not three dates later with two of them a weekend.
+    // v100.9.121: "Next day" rather than "Tomorrow", because after a Friday the next
+    // working day is Monday - and the label says which day it actually lands on.
+    const LF_WAKE_JUMPS = [
+        { label: 'Today', days: 0 },
+        { label: 'Next day', biz: 1 },
+        { label: '+2 days',  biz: 2 },
+        { label: '+3 days',  biz: 3 },
+        // v100.9.146: "+1 week" rather than "Next week" - the five pills needed 467px
+        // and the dialog gives about 420, so the last two were being cut off. The
+        // shorter form also matches +2 days and +3 days beside it.
+        { label: '+1 wk',  days: 7 },
+        { label: '+2 wks', days: 14 },
+        { label: '+1 mth', months: 1 }
+    ];
+
+    const LF_WK_DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    function lfWakeJumpDate(j) {
+        const now = new Date();
+        if (j.biz) return lfAddBusinessDays(now, j.biz);
+        if (j.days === 0) return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (j.months) d.setMonth(d.getMonth() + j.months);
+        else d.setDate(d.getDate() + j.days);
+        return d;
+    }
+
+    // v100.9.115: a console command that reports what the calendar actually looks like.
+    // Twice now the detection has been written against a guessed structure and shipped
+    // without working. Rather than guess a third time, type lfWakeDebug() in the
+    // console with the date picker open and it prints what is really there.
+    window.lfWakeDebug = function () {
+        const out = {};
+        const root = lfWakeCalFind();
+        out.found = !!root;
+
+        if (root) {
+            out.rootTag = root.tagName;
+            out.rootClass = String(root.className || '').slice(0, 120);
+            out.month = lfWakeShownMonth(root);
+            const ar = lfWakeArrows(root);
+            out.prevArrow = ar.prev ? (ar.prev.tagName + '.' + String(ar.prev.className || '').slice(0, 60)) : 'NOT FOUND';
+            out.nextArrow = ar.next ? (ar.next.tagName + '.' + String(ar.next.className || '').slice(0, 60)) : 'NOT FOUND';
+            out.dayNodes = lfWakeDayNodes(root).length;
+            out.usableDays = lfWakeDayCells(root).length;
+            out.weekdays = lfWakeWeekdayCount(root);
+            out.jumpsAdded = !!document.querySelector('.lf-wake-jumps');
+            console.log('[LF Optimizer] calendar found:', out);
+            return out;
+        }
+
+        // nothing matched - describe the best candidates so the gap is visible
+        console.log('[LF Optimizer] no calendar matched. Checking candidates...');
+        const rows = [];
+        document.querySelectorAll('div, table, section').forEach(el => {
+            if (!el.offsetParent) return;
+            const days = lfWakeDayNodes(el).length;
+            const wd = lfWakeWeekdayCount(el);
+            if (days < 10 && wd < 3) return;
+            const txt = (el.textContent || '').replace(/\s+/g, ' ').slice(0, 60);
+            rows.push({
+                tag: el.tagName,
+                cls: String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className || '').slice(0, 70),
+                dayNodes: days,
+                weekdays: wd,
+                titleMatch: LF_WAKE_TITLE_RX.test((el.textContent || '').replace(/\s+/g, ' ')),
+                text: txt
+            });
+        });
+        if (rows.length) console.table(rows.slice(0, 12));
+        else console.log('  nothing with day numbers or weekday names is visible - is the picker open?');
+
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        if (iframes.length) {
+            console.log('  this page has ' + iframes.length + ' iframe(s); if the picker is inside one, the script cannot reach it from here.');
+        }
+        return rows;
+    };
+
+    // ==========================================
+    // WAKEUP DATE: QUICK PICKS ON THE FIELD (v100.9.116)
+    //
+    // Three attempts at this hung off recognising the portal's calendar, and all three
+    // shipped without working because the structure was guessed rather than observed.
+    //
+    // This one does not look at the calendar at all. It attaches to the "Wakeup date"
+    // input - which is plainly visible and easy to match by its own label - and writes
+    // the date into it directly. The format is copied from whatever the field already
+    // contains, or from its placeholder, and falls back to MM/DD/YYYY.
+    // ==========================================
+    // v100.9.123: the field is remembered once found.
+    //
+    // This walks every label, div, span, p and td on the page and runs a regex over
+    // each one's text. At 35ms a call that was fine once, but it is called from the
+    // 500ms loop and from every sweep of the calendar watcher - which is most of why
+    // the page locked up. The result is cached and only re-found once it is gone.
+    let lfWakeFieldCache = null;
+    let lfWakeFieldMiss = 0;
+
+    function lfWakeFieldSearch() {
+        const labels = Array.from(document.querySelectorAll('label, div, span, p, td'))
+            .filter(el => el.offsetParent && el.children.length === 0 &&
+                          /wake\s*-?\s*up date/i.test((el.textContent || '').replace(/\s+/g, ' ')));
+        for (const label of labels) {
+            let node = label;
+            for (let up = 0; up < 4 && node; up++) {
+                const found = Array.from((node.parentElement || node).querySelectorAll('input'))
+                    .find(i => i.offsetParent && i.type !== 'checkbox' && i.type !== 'radio');
+                if (found) return found;
+                node = node.parentElement;
+            }
+        }
+        return null;
+    }
+
+    function lfWakeField() {
+        const cached = lfWakeFieldCache;
+        if (cached && cached.isConnected && cached.offsetParent) return cached;
+
+        // v100.9.125: not found is also worth remembering, briefly.
+        //
+        // The follow-up form is closed almost all of the time, so this search was
+        // failing - at full cost - twice a second on every page of the portal. Measured
+        // at 70ms a pass, that is a seventh of a core burnt continuously for nothing.
+        // After a miss it waits a second before looking again, which no one can notice
+        // when opening a dialog but takes the constant drain away.
+        const now = Date.now();
+        if (!cached && now - lfWakeFieldMiss < 1000) return null;
+
+        lfWakeFieldCache = lfWakeFieldSearch();
+        if (!lfWakeFieldCache) lfWakeFieldMiss = now;
+        return lfWakeFieldCache;
+    }
+
+    // "10/21/2026" -> MM/DD/YYYY, "2026-10-21" -> YYYY-MM-DD, and so on
+    // v100.9.126: the form may keep the time in its own input beside the date.
+    //
+    // The pipeline badge came back reading 12:00 even though the field showed 9:00 PM,
+    // which means the time written into the date box was discarded. If a second input
+    // sits in the same group, that is where the time belongs and it is written there.
+    function lfWakeTimeField(dateInput) {
+        const group = dateInput.closest('.form-group, .grp, .row') || dateInput.parentElement;
+        if (!group) return null;
+        const inputs = Array.from(group.querySelectorAll('input'))
+            .filter(i => i !== dateInput && i.offsetParent && i.type !== 'checkbox' && i.type !== 'radio');
+        return inputs.find(i => /\d{1,2}:\d{2}/.test(i.value || i.placeholder || '') ||
+                                /time/i.test(i.name || i.id || i.className || '')) || null;
+    }
+
+    function lfWakeFormat(input, d) {
+        const sample = (input.value || input.placeholder || '').trim();
+
+        // v100.9.129: "Funded Date" reads 10/5/2026, not 10/05/2026. The field's own
+        // value says whether it pads, so that is copied rather than assumed.
+        const padded = !/^\d\//.test(sample) && !/^\d{1,2}\/\d\//.test(sample);
+        const pad = (n) => padded ? String(n).padStart(2, '0') : String(n);
+        const MM = pad(d.getMonth() + 1), DD = pad(d.getDate()), YYYY = String(d.getFullYear());
+
+        if (/^\d{4}-\d{1,2}-\d{1,2}/.test(sample)) return YYYY + '-' + MM + '-' + DD;
+        if (/^\d{1,2}-\d{1,2}-\d{4}/.test(sample)) return MM + '-' + DD + '-' + YYYY;
+        if (/^\d{1,2}\/\d{1,2}\/\d{2}\b/.test(sample)) return MM + '/' + DD + '/' + YYYY.slice(2);
+        return MM + '/' + DD + '/' + YYYY;                 // the portal's usual form
+    }
+
+    // v100.9.131: the value is typed in, character by character.
+    //
+    // Setting .value and firing one input event was not enough - the form kept its own
+    // idea of the date and rejected a good one as "must be in the future". Driving the
+    // portal's calendar did not land either. So this does what a person does: focus the
+    // field, clear it, press each key, then Enter and blur. Whatever the form listens
+    // for, a real sequence of keystrokes produces it.
+    function lfWakeWriteValue(input, text) {
+        const proto = Object.getPrototypeOf(input);
+        const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        const setValue = (v) => { if (desc && desc.set) desc.set.call(input, v); else input.value = v; };
+        const key = (type, ch) => {
+            try {
+                input.dispatchEvent(new KeyboardEvent(type, { key: ch, char: ch, bubbles: true, cancelable: true }));
+            } catch (e) {}
+        };
+
+        input.focus();
+        try { input.click(); } catch (e) {}
+
+        setValue('');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        for (const ch of String(text)) {
+            key('keydown', ch);
+            key('keypress', ch);
+            setValue(input.value + ch);
+            try {
+                input.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
+            } catch (e) {
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            key('keyup', ch);
+        }
+
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        key('keydown', 'Enter');
+        key('keyup', 'Enter');
+        input.blur();
+        input.dispatchEvent(new Event('blur', { bubbles: true }));
+    }
+
+    function lfWakeSetDate(input, d, time) {
+        let text = lfWakeFormat(input, d);
+
+        const timeField = time ? lfWakeTimeField(input) : null;
+        if (timeField) {
+            lfWakeWriteValue(timeField, time.h + ':' + time.m + ':00 ' + time.a);
+        } else if (time) {
+            text += ' ' + time.h + ':' + time.m + ':00 ' + time.a;
+        }
+
+        lfWakeWriteValue(input, text);
+        return timeField ? text + ' ' + time.h + ':' + time.m + ':00 ' + time.a : text;
+    }
+
+    // ==========================================
+    // US FEDERAL HOLIDAYS (v100.9.118)
+    //
+    // Worked out per year rather than listed, so it keeps working without being
+    // maintained. A holiday on a Saturday is observed on the Friday before and one on
+    // a Sunday on the Monday after - the day the business is actually shut, and so the
+    // day that must not count as a business day.
+    // ==========================================
+    const lfWkKey2 = (d) => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+
+    function lfHolNth(year, month, dow, nth) {
+        const d = new Date(year, month, 1);
+        let count = 0;
+        while (d.getMonth() === month) {
+            if (d.getDay() === dow && ++count === nth) return new Date(d);
+            d.setDate(d.getDate() + 1);
+        }
+        return null;
+    }
+
+    function lfHolLast(year, month, dow) {
+        const d = new Date(year, month + 1, 0);
+        while (d.getDay() !== dow) d.setDate(d.getDate() - 1);
+        return d;
+    }
+
+    function lfHolObserved(d) {
+        if (d.getDay() === 6) return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        if (d.getDay() === 0) return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        return d;
+    }
+
+    const LF_HOL_CACHE = {};
+
+    function lfHolidaysFor(year) {
+        if (LF_HOL_CACHE[year]) return LF_HOL_CACHE[year];
+        const map = {};
+        [[new Date(year, 0, 1), "New Year's Day"],
+         [new Date(year, 5, 19), 'Juneteenth National Independence Day'],
+         [new Date(year, 6, 4), 'Independence Day'],
+         [new Date(year, 10, 11), 'Veterans Day'],
+         [new Date(year, 11, 25), 'Christmas Day']].forEach(([d, name]) => {
+            const obs = lfHolObserved(d);
+            map[lfWkKey2(obs)] = name + (lfWkKey2(obs) !== lfWkKey2(d) ? ' (observed)' : '');
+        });
+        [[lfHolNth(year, 0, 1, 3), 'Martin Luther King Jr. Day'],
+         [lfHolNth(year, 1, 1, 3), "Washington's Birthday"],
+         [lfHolLast(year, 4, 1), 'Memorial Day'],
+         [lfHolNth(year, 8, 1, 1), 'Labor Day'],
+         [lfHolNth(year, 9, 1, 2), 'Columbus Day'],
+         [lfHolNth(year, 10, 4, 4), 'Thanksgiving Day']].forEach(([d, name]) => {
+            if (d) map[lfWkKey2(d)] = name;
+        });
+        LF_HOL_CACHE[year] = map;
+        return map;
+    }
+
+    const lfHolidayName = (d) => lfHolidaysFor(d.getFullYear())[lfWkKey2(d)] || null;
+    const lfIsWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+    // v100.9.158: counting skips weekends only, not holidays.
+    //
+    // Skipping holidays too pushed "+3 days" from a Columbus Day Monday out to the
+    // Tuesday, which takes the decision away: a follow-up on a public holiday is
+    // sometimes exactly what is wanted, and the user is the one who knows. The day is
+    // still marked red and still announced - it just is not avoided on their behalf.
+    const lfIsBusinessDay = (d) => !lfIsWeekend(d);
+
+    function lfAddBusinessDays(from, n) {
+        const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+        let left = n;
+        while (left > 0) {
+            d.setDate(d.getDate() + 1);
+            if (lfIsBusinessDay(d)) left--;
+        }
+        return d;
+    }
+
+    // ==========================================
+    // SCROLLING WAKEUP CALENDAR (v100.9.117)
+    //
+    // A calendar of our own, rendered under the Wakeup date field. The portal's popup
+    // is left alone - three attempts at driving it failed because its structure had to
+    // be guessed. This one is built here, so every part of it is known.
+    //
+    // Months run in one continuous column that scrolls, the way a phone date picker
+    // does: a month is never more than a flick away, and more months are added as the
+    // scroll reaches either end. The date is written into the field the same way the
+    // quick picks write it, which is already proven to register with the form.
+    // ==========================================
+    const LF_WK_MONTH_NAMES = ['January','February','March','April','May','June',
+                               'July','August','September','October','November','December'];
+    const LF_WK_DOW = ['S','M','T','W','T','F','S'];
+    const LF_WK_SPAN = 2;                       // months rendered beyond each end
+
+    const lfWkKey = (d) => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    const lfWkSameDay = (a, b) => a && b && lfWkKey(a) === lfWkKey(b);
+
+    function lfWkParseValue(text) {
+        const t = String(text || '').trim();
+        let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+        m = t.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+        if (m) {
+            const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+            return new Date(y, +m[1] - 1, +m[2]);
+        }
+        return null;
+    }
+
+    function lfWkMonthBlock(year, month, state) {
+        const wrap = document.createElement('div');
+        wrap.className = 'lf-wk-month';
+        wrap.dataset.ym = year + '-' + month;
+
+        const cap = document.createElement('div');
+        cap.className = 'lf-wk-caption';
+        cap.textContent = LF_WK_MONTH_NAMES[month] + ' ' + year;
+
+        // v100.9.162: the month's holidays are named up front, so a clash is seen
+        // before a date is picked rather than reported afterwards.
+        const hols = lfHolidaysFor(year);
+        const inMonth = Object.keys(hols)
+            .map(k => {
+                const p = k.split('-');
+                return { m: +p[1] - 1, d: +p[2], name: hols[k] };
+            })
+            .filter(h => h.m === month)
+            .sort((a, b) => a.d - b.d);
+
+        if (inMonth.length) {
+            const tag = document.createElement('span');
+            tag.className = 'lf-wk-holnote';
+            tag.textContent = inMonth.map(h => h.name.replace(/ \(observed\)$/, '') + ' ' + (month + 1) + '/' + h.d).join(' \u00b7 ');
+            tag.title = inMonth.map(h => h.name + ' \u2013 ' + (month + 1) + '/' + h.d).join('\n');
+            cap.appendChild(tag);
+        }
+
+        wrap.appendChild(cap);
+
+        const grid = document.createElement('div');
+        grid.className = 'lf-wk-grid';
+
+        const first = new Date(year, month, 1);
+        const days = new Date(year, month + 1, 0).getDate();
+        const today = new Date();
+
+        for (let i = 0; i < first.getDay(); i++) {
+            const blank = document.createElement('span');
+            blank.className = 'lf-wk-blank' + (i === 0 || i === 6 ? ' we' : '');
+            grid.appendChild(blank);
+        }
+        for (let d = 1; d <= days; d++) {
+            const date = new Date(year, month, d);
+            const cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = 'lf-wk-day';
+            cell.textContent = String(d);
+            cell.dataset.date = lfWkKey(date);
+            if (lfWkSameDay(date, today)) cell.classList.add('today');
+            if (lfWkSameDay(date, state.selected)) cell.classList.add('sel');
+            if (lfIsWeekend(date)) cell.classList.add('we');
+
+            // v100.9.118: federal holidays are marked and named on hover
+            const hol = lfHolidayName(date);
+            if (hol) {
+                cell.classList.add('hol');
+                cell.title = hol + ' \u2013 ' + LF_WK_MONTH_NAMES[month] + ' ' + d + ', ' + year;
+                cell.dataset.holiday = hol;
+            } else {
+                cell.title = LF_WK_MONTH_NAMES[month] + ' ' + d + ', ' + year;
+            }
+            grid.appendChild(cell);
+        }
+        wrap.appendChild(grid);
+        return wrap;
+    }
+
+    function lfWkRenderRange(state, fromYm, toYm, where) {
+        const frag = document.createDocumentFragment();
+        let y = fromYm.y, m = fromYm.m;
+        for (;;) {
+            frag.appendChild(lfWkMonthBlock(y, m, state));
+            if (y === toYm.y && m === toYm.m) break;
+            m++; if (m > 11) { m = 0; y++; }
+        }
+        if (where === 'top') state.scroll.insertBefore(frag, state.scroll.firstChild);
+        else state.scroll.appendChild(frag);
+    }
+
+    // v100.9.118: the hour is chosen here too, the same way the portal's own picker
+    // offers it. A wakeup at 9am and one at 5pm are different instructions.
+    const LF_WK_TIME_KEY = 'lf_wake_time';
+
+    function lfWkTimeRow(state, onChange) {
+        const row = document.createElement('div');
+        row.className = 'lf-wk-time';
+
+
+        // v100.9.120: the three dropdowns and nothing else. The read-out button added
+        // last time sat beside them rather than replacing them, so the row held four
+        // controls and overflowed the sheet - and the seconds it displayed were never
+        // selectable anyway.
+        const hour = document.createElement('select');
+        hour.className = 'lf-wk-sel';
+        for (let h = 1; h <= 12; h++) hour.add(new Option(String(h), String(h)));
+
+        const min = document.createElement('select');
+        min.className = 'lf-wk-sel';
+        for (let m = 0; m < 60; m += 5) {
+            const v = String(m).padStart(2, '0');
+            min.add(new Option(v, v));
+        }
+
+        // v100.9.121: two values do not need a dropdown - one press flips it
+        const ampm = document.createElement('button');
+        ampm.type = 'button';
+        ampm.className = 'lf-wk-sel lf-wk-ampm';
+        ampm.title = 'Click to switch between AM and PM';
+
+        // v100.9.126: noon, every time the sheet is opened.
+        //
+        // The time used to be remembered between sessions, so one experiment with 9 PM
+        // became the permanent default - which is why it kept coming up as 9:00 PM
+        // despite 12:00 PM being what was asked for. A follow-up time is a per-flag
+        // decision, not a preference worth carrying.
+        hour.value = '12';
+        min.value = '00';
+        ampm.value = 'PM';
+        ampm.textContent = ampm.value;
+
+        state.time = () => ({ h: hour.value, m: min.value, a: ampm.value });
+
+        const label = document.createElement('span');
+        label.className = 'lf-wk-time-label';
+        label.textContent = 'Time';
+        row.appendChild(label);
+
+        const remember = () => onChange();
+
+        [hour, min].forEach(sel => {
+            sel.addEventListener('mousedown', (e) => e.stopPropagation());
+            sel.addEventListener('change', (e) => { e.stopPropagation(); remember(); });
+            row.appendChild(sel);
+        });
+
+        ampm.addEventListener('mousedown', (e) => e.stopPropagation());
+        ampm.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            ampm.value = ampm.value === 'AM' ? 'PM' : 'AM';
+            ampm.textContent = ampm.value;
+            remember();
+        });
+        row.appendChild(ampm);
+        return row;
+    }
+
+    // v100.9.119: the quick picks sit on the form itself, between the date field and
+    // the line explaining what the flag does - where they are visible without opening
+    // the calendar at all.
+    // v100.9.129: the toast names the field it just filled. It said "Wakeup date" for
+    // every field, which reads as the wrong thing happening on an UPDATE LOAN dialog.
+    // Opens the portal's picker, walks it to the month wanted and clicks the day, so
+    // the selection is registered by the form itself. Returns false if the calendar
+    // cannot be reached, and the caller falls back to writing the text.
+    // v100.9.131: typing is the whole mechanism now - the attempt to drive the
+    // portal's calendar is gone, and with it the reason to keep that calendar alive.
+    // v100.9.133: the date is chosen in the portal's own calendar.
+    //
+    // Typing into the field never reached the form's state: the value showed correctly
+    // and submit still saved the old date, changing only the time. The form listens to
+    // its calendar, so that is what gets clicked - off-screen, where it cannot be seen.
+    // v100.9.135: the pick waits for the calendar to be built.
+    //
+    // The portal renders its calendar a tick or two after the field is focused, the
+    // way React does. The old code focused and looked for it in the same breath, found
+    // nothing, and quietly fell back to typing - which the form ignores. That is why
+    // submit kept saving the old date even though the field read correctly.
+    //
+    // A real click is also sent as mousedown + mouseup + click: some pickers act on
+    // mousedown and never see a bare click() at all.
+    function lfWkRealClick(el) {
+        ['mousedown', 'mouseup', 'click'].forEach(type => {
+            try {
+                el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+            } catch (e) {
+                if (type === 'click' && typeof el.click === 'function') el.click();
+            }
+        });
+    }
+
+    // ==========================================
+    // FLATPICKR (v100.9.138)
+    //
+    // The console on the real page finally named it: the portal uses flatpickr, not the
+    // React picker every previous attempt assumed. Two things follow.
+    //
+    // First, flatpickr keeps its instance on the input as `_flatpickr`, and that
+    // instance has setDate(date, true) - which sets its own state and fires its change
+    // handlers. That is exactly what submit reads, so there is no need to simulate
+    // clicks at all. Every failure so far came from trying to drive the UI instead of
+    // telling the component.
+    //
+    // Second, the CSS that hid the calendar used position:fixed, and a fixed element
+    // reports offsetParent === null. The day-cell filter required offsetParent, so it
+    // discarded every cell - "day cell to click: NOT FOUND". Parking now uses a
+    // transform, which leaves offsetParent intact for the fallback path.
+    // ==========================================
+    function lfWkFlatpickr(input) {
+        if (input && input._flatpickr) return input._flatpickr;
+        // flatpickr also hangs the instance off its own calendar element
+        const cal = document.querySelector('.flatpickr-calendar');
+        if (cal && cal._flatpickr) return cal._flatpickr;
+        return null;
+    }
+
+    function lfWkSetViaFlatpickr(input, d, time) {
+        const fp = lfWkFlatpickr(input);
+        if (!fp || typeof fp.setDate !== 'function') return false;
+
+        const when = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (time) {
+            let h = parseInt(time.h, 10) % 12;
+            if (/pm/i.test(time.a)) h += 12;
+            when.setHours(h, parseInt(time.m, 10) || 0, 0, 0);
+        }
+
+        try {
+            fp.setDate(when, true);          // true = fire its change handlers
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // v100.9.136: every candidate calendar is tried, and the result is verified.
+    //
+    // Picking kept failing silently. The page can hold more than one calendar-like
+    // element - an old one left parked from a previous open, plus the live one the
+    // field is actually bound to - and the first match in document order was often the
+    // stale one. Clicking it changed nothing, and nothing checked.
+    //
+    // So: collect every candidate, un-park it while it is being driven, click, then
+    // read the field back. If the date did not take, move on to the next candidate.
+    function lfWkCalendarCandidates() {
+        const out = [];
+        lfWkCalendarRoots().forEach(root => {
+            const pool = [root].concat(Array.from(root.querySelectorAll('div, table, section')));
+            pool.forEach(el => {
+                if (!el.closest) return;
+                if (el.closest('.lf-wk, .lf-dd-cal, #lf-color-panel, .lf-et-modal')) return;
+                if (lfWakeWeekdayCount(el) < 5) return;
+                if (lfWakeDayNodes(el).length < 20) return;
+                if (out.some(x => x.contains(el))) return;      // keep the outermost only
+                out.push(el);
+            });
+        });
+        return out.reverse();        // newest first - the live one is usually last added
+    }
+
+    function lfWkFieldHasDate(input, d) {
+        const v = (input.value || '').replace(/\s+/g, ' ');
+        if (!v) return false;
+        const m = String(d.getMonth() + 1), day = String(d.getDate()), y = String(d.getFullYear());
+        const rx = new RegExp('(^|\\D)0?' + m + '\\D0?' + day + '\\D' + y);
+        return rx.test(v);
+    }
+
+    function lfWkPickOnCalendar(cal, d) {
+        const wasParked = cal.classList.contains('lf-sys-cal-parked');
+        if (wasParked) cal.classList.remove('lf-sys-cal-parked');   // interactive while driven
+        try {
+            const arrows = lfWakeArrows(cal);
+            for (let step = 0; step < 36; step++) {
+                const shown = lfWakeShownMonth(cal);
+                if (!shown) return false;
+                const diff = (d.getFullYear() - shown.year) * 12 + (d.getMonth() - shown.month);
+                if (diff === 0) break;
+                const btn = diff > 0 ? arrows.next : arrows.prev;
+                if (!btn) return false;
+                lfWkRealClick(btn);
+            }
+            const want = String(d.getDate());
+            const cell = lfWakeDayCells(cal).find(c => (c.textContent || '').trim() === want);
+            if (!cell) return false;
+            lfWkRealClick(cell);
+            return true;
+        } finally {
+            if (wasParked) cal.classList.add('lf-sys-cal-parked');
+        }
+    }
+
+    function lfWkPickViaPortal(input, d, done) {
+        lfWkDriving = true;
+
+        // the direct route: tell the component, do not act out a click
+        if (lfWkSetViaFlatpickr(input, d, lfWkPendingTime)) {
+            lfWkDriving = false;
+            done(true);
+            return;
+        }
+
+        input.focus();
+        try { lfWkRealClick(input); } catch (e) {}
+
+        let tries = 0;
+        const attempt = () => {
+            const cands = lfWkCalendarCandidates();
+            for (const cal of cands) {
+                lfWkPickOnCalendar(cal, d);
+                if (lfWkFieldHasDate(input, d)) {      // the field proves it took
+                    lfWkDriving = false;
+                    done(true);
+                    return;
+                }
+            }
+            if (++tries > 25) {
+                lfWkDriving = false;
+                done(false);
+                return;
+            }
+            setTimeout(attempt, 20);
+        };
+        attempt();
+    }
+
+    let lfWkPendingTime = null;
+
+    function lfWkApplyDate(input, d, time, after) {
+        lfWkPendingTime = time || null;
+        const finish = (viaPortal) => {
+            if (viaPortal) {
+                if (time && !lfWkFlatpickr(input)) {
+                    const tf = lfWakeTimeField(input);
+                    if (tf) lfWakeWriteValue(tf, time.h + ':' + time.m + ':00 ' + time.a);
+                }
+                if (after) after((input.value || '').trim() || lfWakeFormat(input, d));
+                return;
+            }
+            const written = lfWakeSetDate(input, d, time);     // last resort
+            if (after) after(written);
+        };
+        lfWkPickViaPortal(input, d, finish);
+    }
+
+
+
+
+
+    // v100.9.137: one short command instead of a wall of pasted code.
+    //
+    // Pasting a long snippet into the console kept going wrong - the browser re-ran a
+    // truncated copy from its own history. Typing lfWake2() is three seconds and
+    // cannot be mangled. Open the Follow-up flag first, then run it.
+    window.lfWake2 = function () {
+        const i = document.querySelector('.lf-wk-field');
+        if (!i) { console.log('[LF] No wakeup field. Open the Follow-up flag first, then run lfWake2() again.'); return; }
+
+        const t = new Date(); t.setDate(t.getDate() + 2);
+        const want = (t.getMonth() + 1) + '/' + t.getDate() + '/' + t.getFullYear();
+        console.log('[LF] target:', want, '| field before:', JSON.stringify(i.value));
+
+        i.focus();
+        setTimeout(function () {
+            let cands = [];
+            try { cands = lfWkCalendarCandidates(); } catch (e) { console.log('[LF] candidate scan failed:', e.message); }
+            console.log('[LF] calendars found:', cands.length);
+
+            cands.forEach(function (c, n) {
+                let month = null, nextBtn = false, days = 0;
+                try { month = lfWakeShownMonth(c); } catch (e) {}
+                try { nextBtn = !!lfWakeArrows(c).next; } catch (e) {}
+                try { days = lfWakeDayNodes(c).length; } catch (e) {}
+                console.log('  #' + n, c.tagName,
+                    '| class:', String(c.className || '').slice(0, 60),
+                    '| parked:', c.classList.contains('lf-sys-cal-parked'),
+                    '| dayNodes:', days,
+                    '| month:', JSON.stringify(month),
+                    '| nextArrow:', nextBtn);
+            });
+
+            if (!cands.length) { console.log('[LF] nothing recognised as a calendar - that is the bug.'); return; }
+
+            let cell = null;
+            try { cell = lfWakeDayCells(cands[0]).find(function (x) { return x.textContent.trim() === String(t.getDate()); }); } catch (e) {}
+            console.log('[LF] day cell to click:', cell ? cell.outerHTML.slice(0, 140) : 'NOT FOUND');
+            if (!cell) return;
+
+            const before = i.value;
+            ['mousedown', 'mouseup', 'click'].forEach(function (ev) {
+                cell.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+            });
+            setTimeout(function () {
+                console.log('[LF] field after click:', JSON.stringify(i.value), '| changed:', i.value !== before);
+            }, 300);
+        }, 400);
+    };
+
+    function lfWkFieldName(input) {
+        const scope = input.closest('.form-group, .grp, .row') || input.parentElement.parentElement;
+        if (scope) {
+            const label = Array.from(scope.querySelectorAll('label, div, span, p, td'))
+                .find(el => !el.children.length && el.offsetParent &&
+                            LF_WK_DATE_LABEL.test((el.textContent || '').replace(/\s+/g, ' ').trim()));
+            if (label) {
+                return (label.textContent || '').replace(/\s+/g, ' ').replace(/\(.*?\)/g, '').replace(/:$/, '').trim();
+            }
+        }
+        return 'Date';
+    }
+
+    // v100.9.142: "Today" is dropped from the wakeup field's shortcuts.
+    //
+    // A follow-up flag that wakes today is the same as no flag at all, so the button
+    // only takes up room there. It stays on the other date fields - Funded Date and
+    // the like - where today is the usual answer and was asked for by name.
+    function lfWakeJumpsFor(input) {
+        const scope = input.closest('.form-group, .grp, .row') || input.parentElement;
+        const text = scope ? (scope.textContent || '') : '';
+        const isWakeup = /wake\s*-?\s*up/i.test(text);
+        return isWakeup ? LF_WAKE_JUMPS.filter(j => j.label !== 'Today') : LF_WAKE_JUMPS;
+    }
+
+    function lfWkJumpBar(input, onPick) {
+        const bar = document.createElement('div');
+        bar.className = 'lf-wake-jumps';
+        bar.addEventListener('mousedown', (e) => e.preventDefault());
+        lfWakeJumpsFor(input).forEach(j => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'lf-wake-jump';
+            // v100.9.147: the weekday sits under the label again, in light orange, and
+            // the longer hops show a date instead. "+1 month · Sat" says little - the
+            // date is what is being decided - while for a hop of one to three working
+            // days the weekday is exactly what matters.
+            const landsOn = lfWakeJumpDate(j);
+            const sub = j.biz
+                ? LF_WK_DOW_SHORT[landsOn.getDay()]
+                : (landsOn.getMonth() + 1) + '/' + landsOn.getDate();
+            b.innerHTML = '<span class="lf-jump-main">' + j.label + '</span>' +
+                          '<span class="lf-jump-dow">' + sub + '</span>';
+            b.title = (j.biz ? j.biz + ' business day' + (j.biz === 1 ? '' : 's') + ' from today \u2013 ' : '') +
+                      LF_WK_DOW_SHORT[landsOn.getDay()] + ', ' +
+                      (landsOn.getMonth() + 1) + '/' + landsOn.getDate() + '/' + landsOn.getFullYear();
+            b.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                // v100.9.149: the chosen shortcut stays lit, and only one at a time -
+                // so it is clear which hop produced the date now in the field.
+                const strip = b.parentElement;
+                if (strip) strip.querySelectorAll('.lf-wake-jump.on').forEach(x => x.classList.remove('on'));
+                b.classList.add('on');
+                onPick(lfWakeJumpDate(j));
+            });
+            bar.appendChild(b);
+        });
+        return bar;
+    }
+
+    // the hint line under the field marks where the bar belongs
+    function lfWkPlaceJumpBar(input, bar) {
+        // v100.9.157: the bar belongs beside its field or nowhere at all
+        const dialog = input.closest('[role="dialog"], .modal, .modal-content, .popup');
+        if (!dialog) return;
+        // v100.9.125: searched inside the dialog, not the whole page - this ran on
+        // every pass while the bar was missing, at the same cost as the field search.
+        const scope = dialog;
+        const hint = Array.from(scope.querySelectorAll('div, p, span, small, label'))
+            .find(el => el.offsetParent && el.children.length === 0 &&
+                        /hidden on your pipeline until wake/i.test((el.textContent || '').replace(/\s+/g, ' ')));
+        if (hint && hint.parentElement && hint.parentElement.contains(input)) {
+            hint.parentElement.insertBefore(bar, hint);
+            return;
+        }
+        const wrap = input.parentElement;
+        if (wrap && wrap.parentElement && dialog.contains(wrap.parentElement)) {
+            wrap.parentElement.insertBefore(bar, wrap.nextSibling);
+        }
+    }
+
+    // v100.9.143: a quiet note when the chosen day is not a working day.
+    //
+    // Holidays are already red and weekends are greyed, but both can still be picked -
+    // deliberately, because a follow-up on a Saturday is sometimes what is wanted. The
+    // note says what the day is and nothing more: no blocking, no dialog to dismiss.
+    const LF_WK_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    function lfWkDayNote(d) {
+        const hol = lfHolidayName(d);
+        if (hol) return hol + ' \u2013 office closed';
+        if (lfIsWeekend(d)) return LF_WK_DAY_NAMES[d.getDay()] + ' \u2013 office closed';
+        return '';
+    }
+
+    // v100.9.160: the holiday notice is its own banner, not another toast.
+    //
+    // Styling it amber was not enough - it still arrived in the same corner as every
+    // routine confirmation, in the same shape, so it read as more of the same. This
+    // drops down from the top centre of the screen, where nothing else appears, and is
+    // large enough to be read without looking for it. It stays five seconds, or until
+    // clicked, and never blocks anything behind it.
+    function lfWarnBanner(title, detail) {
+        const old = document.getElementById('lf-warn-banner');
+        if (old) old.remove();
+
+        const bar = document.createElement('div');
+        bar.id = 'lf-warn-banner';
+        bar.innerHTML =
+            '<span class="lf-warn-ico">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" ' +
+            'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 3.2 1.4 21.2h21.2z"></path>' +
+            '<line x1="12" y1="9.5" x2="12" y2="14.8"></line>' +
+            '<line x1="12" y1="17.9" x2="12" y2="18"></line></svg></span>' +
+            '<span class="lf-warn-text"><b></b><i></i></span>' +
+            '<button type="button" class="lf-warn-x" aria-label="Dismiss">\u00d7</button>';
+
+        bar.querySelector('b').textContent = title;
+        bar.querySelector('i').textContent = detail || '';
+
+        // v100.9.161: it leaves the way it arrived - lifting back up and fading -
+        // rather than simply ceasing to exist.
+        const close = () => {
+            if (bar.dataset.closing === '1') return;
+            bar.dataset.closing = '1';
+            bar.classList.remove('show');
+            bar.classList.add('leaving');
+            setTimeout(() => { if (bar.parentNode) bar.remove(); }, 420);
+        };
+        bar.querySelector('.lf-warn-x').addEventListener('click', (e) => { e.preventDefault(); close(); });
+        bar.addEventListener('click', close);
+
+        document.body.appendChild(bar);
+        requestAnimationFrame(() => bar.classList.add('show'));
+        setTimeout(close, 5000);
+    }
+
+    // v100.9.162: each date is announced once.
+    //
+    // Clicking the same holiday twice while settling on a date brought the banner back
+    // each time, which turns a useful warning into something to swat away. The set is
+    // per page load, so it starts fresh on the next loan.
+    const LF_WARNED_DAYS = new Set();
+
+    // Announces a non-working day without getting in the way of the choice.
+    function lfWkAnnounceDay(d) {
+        const hol = lfHolidayName(d);
+        if (!hol) return;
+
+        const key = lfWkKey2(d);
+        if (LF_WARNED_DAYS.has(key)) return;
+        LF_WARNED_DAYS.add(key);
+        // v100.9.161: the day and date lead, the holiday's name sits underneath -
+        // which is the order the sentence is read in.
+        const dayName = LF_WK_DAY_NAMES[d.getDay()];
+        lfWarnBanner(dayName + ' ' + (d.getMonth() + 1) + '/' + d.getDate() + ' is a national holiday',
+                     hol.toUpperCase());
+    }
+
+    function lfWkShowNote(box, d) {
+        let note = box.querySelector('.lf-wk-note');
+        const text = lfWkDayNote(d);
+
+        if (!text) { if (note) note.remove(); return; }
+
+        if (!note) {
+            note = document.createElement('div');
+            note.className = 'lf-wk-note';
+            const scroll = box.querySelector('.lf-wk-scroll');
+            if (scroll && scroll.parentNode) scroll.parentNode.insertBefore(note, scroll.nextSibling);
+            else box.appendChild(note);
+        }
+        note.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" ' +
+            'stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle>' +
+            '<line x1="12" y1="8" x2="12" y2="13"></line><line x1="12" y1="16.5" x2="12" y2="16.6"></line></svg>' +
+            '<span></span>';
+        note.querySelector('span').textContent = text;
+    }
+
+    function lfWkBuild(input) {
+        const state = {
+            selected: lfWkParseValue(input.value),
+            scroll: null,
+            first: null,
+            last: null
+        };
+
+        const box = document.createElement('div');
+        box.className = 'lf-wk';
+        box.addEventListener('mousedown', (e) => {
+            if (!e.target.closest('.lf-wk-day, .lf-wk-nav, .lf-wake-jump')) e.preventDefault();
+        });
+
+        // --- header: month label, today, and the two steps ---
+        const head = document.createElement('div');
+        head.className = 'lf-wk-head';
+        const label = document.createElement('div');
+        label.className = 'lf-wk-label';
+        const nav = document.createElement('div');
+        nav.className = 'lf-wk-navs';
+        const mkNav = (txt, title) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'lf-wk-nav';
+            b.textContent = txt;
+            b.title = title;
+            nav.appendChild(b);
+            return b;
+        };
+        const bPrev = mkNav('\u2191', 'Previous month');
+        const bToday = mkNav('Today', 'Jump to today');
+        bToday.classList.add('lf-wk-today-btn');
+        const bNext = mkNav('\u2193', 'Next month');
+        head.appendChild(label);
+        head.appendChild(nav);
+        box.appendChild(head);
+
+        // --- fixed weekday row ---
+        const dow = document.createElement('div');
+        dow.className = 'lf-wk-dow';
+        LF_WK_DOW.forEach((d, i) => {
+            const c = document.createElement('span');
+            c.textContent = d;
+            if (i === 0 || i === 6) c.className = 'we';
+            dow.appendChild(c);
+        });
+        box.appendChild(dow);
+
+        // --- the scrolling months ---
+        const scroll = document.createElement('div');
+        scroll.className = 'lf-wk-scroll';
+        box.appendChild(scroll);
+        state.scroll = scroll;
+
+        // v100.9.131: the list starts at the month being shown, so it is already at the
+        // top when the sheet opens. Rendering two months before it and then scrolling
+        // into place relied on offsetTop inside a scroller that had not been laid out
+        // yet - which is why it kept opening on August. Earlier months are still
+        // reachable: scrolling up past the top adds them.
+        const base = state.selected || new Date();
+        state.first = { y: base.getFullYear(), m: base.getMonth() };
+        state.last = { y: base.getFullYear(), m: base.getMonth() + LF_WK_SPAN * 2 };
+        const norm = (o) => { while (o.m < 0) { o.m += 12; o.y--; } while (o.m > 11) { o.m -= 12; o.y++; } return o; };
+        norm(state.first); norm(state.last);
+        lfWkRenderRange(state, state.first, state.last, 'bottom');
+
+        const scrollToMonth = (y, m, smooth) => {
+            const el = scroll.querySelector('[data-ym="' + y + '-' + m + '"]');
+            if (!el) return;
+            scroll.scrollTo({ top: el.offsetTop - scroll.firstChild.offsetTop, behavior: smooth ? 'smooth' : 'auto' });
+        };
+
+        const updateLabel = () => {
+            if (!scroll.scrollTop && scroll.firstElementChild) {
+                const cap = scroll.firstElementChild.querySelector('.lf-wk-caption');
+                if (cap) { label.textContent = cap.textContent; return; }
+            }
+            let best = null;
+            Array.from(scroll.children).forEach(ch => {
+                if (ch.offsetTop - scroll.scrollTop <= 12) best = ch;
+            });
+            const cur = best || scroll.firstElementChild;
+            if (cur) label.textContent = cur.querySelector('.lf-wk-caption').textContent;
+        };
+
+        // more months are added as either end is reached
+        scroll.addEventListener('scroll', () => {
+            updateLabel();
+            if (scroll.scrollTop < 40) {
+                const before = scroll.scrollHeight;
+                const target = norm({ y: state.first.y, m: state.first.m - 1 });
+                lfWkRenderRange(state, target, target, 'top');
+                state.first = target;
+                scroll.scrollTop += scroll.scrollHeight - before;     // keep the view still
+            }
+            if (scroll.scrollTop + scroll.clientHeight > scroll.scrollHeight - 40) {
+                const target = norm({ y: state.last.y, m: state.last.m + 1 });
+                lfWkRenderRange(state, target, target, 'bottom');
+                state.last = target;
+            }
+        });
+
+        bPrev.addEventListener('click', (e) => { e.preventDefault(); scroll.scrollBy({ top: -scroll.clientHeight * 0.6, behavior: 'smooth' }); });
+        bNext.addEventListener('click', (e) => { e.preventDefault(); scroll.scrollBy({ top: scroll.clientHeight * 0.6, behavior: 'smooth' }); });
+        bToday.addEventListener('click', (e) => {
+            e.preventDefault();
+            const t = new Date();
+            scrollToMonth(t.getFullYear(), t.getMonth(), true);
+        });
+
+        // --- picking a day ---
+        scroll.addEventListener('click', (e) => {
+            const cell = e.target.closest('.lf-wk-day');
+            if (!cell) return;
+            e.preventDefault(); e.stopPropagation();
+            const parts = cell.dataset.date.split('-');
+            const d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+            state.selected = d;
+            scroll.querySelectorAll('.lf-wk-day.sel').forEach(x => x.classList.remove('sel'));
+            cell.classList.add('sel');
+            document.querySelectorAll('.lf-wake-jump.on').forEach(x => x.classList.remove('on'));
+            lfWkShowNote(box, d);
+            lfWkAnnounceDay(d);
+            lfWkApplyDate(input, d, state.time ? state.time() : null, (written) => {
+                showToast(lfWkFieldName(input) + ' set to ' + written);
+            });
+            lfWkClose(box);
+        });
+
+        if (lfWkWantsTime(input)) {
+            box.appendChild(lfWkTimeRow(state, () => {
+                if (state.selected) lfWkApplyDate(input, state.selected, state.time(), null);
+            }));
+        }
+
+        // used by the quick picks, which now live outside this sheet
+        box._lfPick = (d) => {
+            state.selected = d;
+            scroll.querySelectorAll('.lf-wk-day.sel').forEach(x => x.classList.remove('sel'));
+            const cell = scroll.querySelector('.lf-wk-day[data-date="' + lfWkKey(d) + '"]');
+            if (cell) cell.classList.add('sel');
+            lfWkShowNote(box, d);
+            lfWkAnnounceDay(d);
+            scrollToMonth(d.getFullYear(), d.getMonth(), true);
+            lfWkApplyDate(input, d, state.time ? state.time() : null, (written) => {
+                showToast(lfWkFieldName(input) + ' set to ' + written);
+            });
+            lfWkClose(box);
+        };
+
+        requestAnimationFrame(() => { scroll.scrollTop = 0; updateLabel(); });
+        return box;
+    }
+
+    // v100.9.118: the sheet is a popover, not a permanent block.
+    //
+    // It opens when a date field is clicked, closes with a fade once a date is chosen,
+    // and closes on Escape or a click elsewhere. The portal's own popup is suppressed
+    // while ours is in use - two calendars for one field is worse than either.
+    function lfWkPosition(box, input) {
+        const r = input.getBoundingClientRect();
+        const w = box.offsetWidth || 320;
+        let left = r.left + r.width / 2 - w / 2;                 // centred on the field
+        left = Math.max(8, Math.min(left, (window.innerWidth || 1200) - w - 8));
+
+        let top = r.bottom + 6;
+        const h = box.offsetHeight || 380;
+        if (top + h > (window.innerHeight || 800) - 8) {
+            const above = r.top - h - 6;
+            if (above > 8) top = above;                           // flip up when short of room
+        }
+        box.style.left = Math.round(left) + 'px';
+        box.style.top = Math.round(top) + 'px';
+    }
+
+    function lfWkClose(box) {
+        if (!box || !box.classList.contains('open')) return;
+        box.classList.remove('open');
+        setTimeout(() => { if (!box.classList.contains('open')) box.style.display = 'none'; }, 160);
+    }
+
+    function lfWkOpen(box, input) {
+        box.style.display = 'block';
+        lfWkPosition(box, input);
+        requestAnimationFrame(() => box.classList.add('open'));
+    }
+
+    // v100.9.129: every date field on an open dialog, not only the follow-up one.
+    //
+    // "Funded Date" on UPDATE LOAN is the same job with the same awkward calendar, and
+    // so is any other date the portal asks for in a dialog. Fields are matched by their
+    // own label ending in "date", which is how the portal names all of them.
+    const LF_WK_DATE_LABEL = /(^|\s)(wake\s*-?\s*up|funded|closed|closing|lock|locked|expiration|signing|disbursement|received|sent|start|end|due)?\s*date(\s|:|$)/i;
+
+    let lfWkFieldsCache = [];
+    let lfWkFieldsMiss = 0;
+
+    function lfWkDateFields() {
+        // v100.9.129: the scan is cached the same way the single field was.
+        //
+        // Walking every label inside every dialog on each pass put the per-loop cost
+        // back up to 11ms with nothing open and 24ms with a dialog - the same drain
+        // that locked the page up before. Bound fields are reused while they are still
+        // on screen, and a fruitless scan is not repeated for a second.
+        const live = lfWkFieldsCache.filter(i => i.isConnected && i.offsetParent);
+        if (live.length) { lfWkFieldsCache = live; return live; }
+
+        const now = Date.now();
+        if (now - lfWkFieldsMiss < 1000) return [];
+
+        const out = [];
+        const seen = new Set();
+
+        // v100.9.157: only fields inside an open dialog.
+        //
+        // The fallback below used to take any "... date" field anywhere on the page.
+        // The pipeline carries such fields outside any dialog, so a shortcut strip was
+        // built for one of them and - having no dialog to sit inside - was placed at the
+        // top of the document, where it covered the navigation bar.
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"], .modal, .modal-content, .popup'))
+            .filter(d => d.offsetParent);
+        if (!dialogs.length) {
+            lfWkFieldsCache = [];
+            lfWkFieldsMiss = now;
+            return [];
+        }
+
+        dialogs.forEach(dlg => {
+            Array.from(dlg.querySelectorAll('label, div, span, p, td')).forEach(label => {
+                if (label.children.length) return;
+                if (!label.offsetParent) return;
+                const txt = (label.textContent || '').replace(/\s+/g, ' ').trim();
+                if (txt.length > 40 || !LF_WK_DATE_LABEL.test(txt)) return;
+
+                let node = label;
+                for (let up = 0; up < 4 && node; up++) {
+                    const found = Array.from((node.parentElement || node).querySelectorAll('input'))
+                        .find(i => i.offsetParent && i.type !== 'checkbox' && i.type !== 'radio' &&
+                                   i.type !== 'hidden' && !seen.has(i));
+                    if (found) { seen.add(found); out.push(found); return; }
+                    node = node.parentElement;
+                }
+            });
+        });
+
+        lfWkFieldsCache = out;
+        if (!out.length) lfWkFieldsMiss = now;
+        return out;
+    }
+
+    // a field already carrying a time, or named like one, gets the time row
+    function lfWkWantsTime(input) {
+        const sample = (input.value || input.placeholder || '');
+        if (/\d{1,2}:\d{2}/.test(sample)) return true;
+        const group = input.closest('.form-group, .grp, .row') || input.parentElement;
+        const text = group ? (group.textContent || '') : '';
+        return /wake\s*-?\s*up/i.test(text);
+    }
+
+    // v100.9.121: checked every pass rather than once at binding.
+    //
+    // The bar used to be created only while the field was first bound, and skipped if
+    // any .lf-wake-jumps already existed. The old portal-calendar helper created one
+    // of those inside the portal's own sheet - which is now removed on sight, taking
+    // the bar with it - so the test passed, the bar vanished, and none was ever made
+    // again. That helper is gone and this rebuilds whenever the form redraws.
+    // v100.9.129: one bar per field. A single shared lookup meant the second dialog
+    // field found the first field's bar and skipped making its own.
+    function lfWkEnsureJumpBar(input, box) {
+        if (!input.offsetParent) return;          // v100.9.156: not on screen, nothing to add to
+        const scope = input.closest('.form-group, .grp, .row') || input.parentElement.parentElement;
+        const existing = scope ? scope.querySelector('.lf-wake-jumps') : null;
+        if (existing && existing.offsetParent) return;
+        if (existing) existing.remove();
+        const bar = lfWkJumpBar(input, (d) => box._lfPick(d));
+        bar._lfWkInput = input;
+        lfWkPlaceJumpBar(input, bar);
+    }
+
+    // v100.9.132: the open handler lives on the document, and dead sheets are swept.
+    //
+    // The console on the real page showed five sheets built and not one field bound:
+    // the portal replaces the input element whenever it re-renders the dialog, so a
+    // listener attached to that element dies with it and a fresh sheet is built for
+    // the replacement - over and over. Clicking the field that is actually on screen
+    // therefore did nothing, because its handler belonged to an element long gone.
+    //
+    // Delegating from the document survives any number of re-renders, and sheets whose
+    // field has disappeared are removed instead of piling up.
+    function lfWkInstallOpener() {
+        if (document.documentElement.dataset.lfWkOpener === '1') return;
+        document.documentElement.dataset.lfWkOpener = '1';
+
+        // no preventDefault and no stopPropagation - v100.9.120 blocked the form's own
+        // events this way and left the dialog greyed out behind a spinner
+        ['click', 'focusin'].forEach(type => {
+            document.addEventListener(type, (e) => {
+                if (lfWkDriving) return;          // our own focus, not the user's
+                const input = e.target && e.target.closest ? e.target.closest('.lf-wk-field') : null;
+                if (!input) return;
+                const box = input._lfWkBox;
+                if (box) lfWkOpen(box, input);
+            });
+        });
+    }
+
+    // v100.9.156: anything of ours goes the moment its field is out of sight.
+    //
+    // The old test was "is the input still in the document", which stays true after the
+    // dialog closes if the portal merely hides it - and a bar left behind that way can
+    // end up drawn wherever it happens to sit. Visibility is the right test: no visible
+    // field, no shortcuts and no sheet.
+    function lfWkSweepOrphans() {
+        const gone = (owner) => !owner || !owner.isConnected || !owner.offsetParent;
+
+        document.querySelectorAll('.lf-wk-pop').forEach(box => {
+            if (gone(box._lfWkInput)) box.remove();
+        });
+
+        document.querySelectorAll('.lf-wake-jumps').forEach(bar => {
+            if (!bar.isConnected) return;
+            if (gone(bar._lfWkInput)) bar.remove();
+        });
+    }
+
+    function lfWakeQuickPicks() {
+        lfWkInstallOpener();
+        lfWkSweepOrphans();
+
+        lfWkDateFields().forEach(input => {
+            // a replaced element arrives without the marker, so it is bound afresh
+            if (input._lfWkBox && input._lfWkBox.isConnected) {
+                input.classList.add('lf-wk-field');
+                lfWkEnsureJumpBar(input, input._lfWkBox);
+                return;
+            }
+
+            const box = lfWkBuild(input);
+            box.classList.add('lf-wk-pop');
+            box.style.display = 'none';
+            box._lfWkInput = input;
+            document.body.appendChild(box);
+
+            input._lfWkBox = box;
+            input.classList.add('lf-wk-field');
+            input.setAttribute('autocomplete', 'off');
+
+            document.addEventListener('mousedown', (e) => {
+                if (box.contains(e.target) || e.target === input) return;
+                lfWkClose(box);
+            }, true);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') lfWkClose(box);
+            }, true);
+            window.addEventListener('resize', () => { if (box.classList.contains('open')) lfWkPosition(box, input); });
+
+            lfWkEnsureJumpBar(input, box);
+        });
+    }
+
+
+    // whatever calendar the portal puts on screen beside our field is taken out of the
+    // way - identified only by holding a month of day numbers, never by its markup
+    // v100.9.119: the portal's own sheet is removed whenever the follow-up form is on
+    // screen, not just while ours happens to be open. Previously it was only hidden
+    // during that moment, so it still flashed up on the next click.
+    //
+    // It is recognised by what it is - a weekday row above twenty-odd day numbers -
+    // never by its markup, and our own calendars are excluded by class.
+    // v100.9.123: the sweep is bounded, and it is not run on every mutation.
+    //
+    // The previous version walked every div on the page and, for each one, walked its
+    // whole subtree twice. One pass measured 388ms on a page this size, and the
+    // observer fired it on every DOM change the portal made - several times a second.
+    // The page simply stopped responding, which is why the modal sat dimmed behind its
+    // spinner. That was not a calendar bug; it was the cost of looking for one.
+    //
+    // Now: only inside the dialog holding the field, only elements that already look
+    // like a calendar by a cheap test, and at most once every 250ms.
+    let lfWkLastSweep = 0;
+    let lfWkDriving = false;
+
+    // v100.9.130: the portal's calendar is moved out of sight, not switched off.
+    //
+    // Writing the date into the field was never accepted: the form validates against
+    // its own state, not the text in the box, so a perfectly good future date came
+    // back as "must be in the future". Picking the same day in the portal's calendar
+    // worked, because that is what the form actually listens to.
+    //
+    // So it stays alive and functioning, parked where it cannot be seen, and our sheet
+    // drives it. display:none would stop it responding to clicks at all.
+    // v100.9.134: the search looks outside the dialog as well.
+    //
+    // v100.9.123 narrowed this to the dialog holding the field, to stop a full-page
+    // scan locking the browser up. But the portal does not render its calendar inside
+    // the dialog - it mounts it at the top of <body>, the way React portals do. So
+    // from that version on, the calendar was never once found, and every "removed the
+    // system calendar" claim since has been wrong.
+    //
+    // The cost is kept down by looking only where a calendar can actually be: inside
+    // the dialog, and in the handful of elements mounted directly under <body>.
+    function lfWkCalendarRoots() {
+        const roots = [];
+        const field = lfWakeField();
+        if (field) {
+            const dlg = field.closest('[role="dialog"], .modal, .modal-content, .popup, form');
+            if (dlg) roots.push(dlg);
+        }
+        Array.from(document.body.children).forEach(el => {
+            if (el.nodeType !== 1) return;
+            if (el.closest('.lf-wk, .lf-dd-cal, #lf-color-panel, .lf-et-modal')) return;
+            if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') return;
+            roots.push(el);
+        });
+        return roots;
+    }
+
+    function lfWkHideSystemSheet(force) {
+        const now = Date.now();
+        if (!force && now - lfWkLastSweep < 250) return;
+        lfWkLastSweep = now;
+
+        const field = lfWakeField();
+        if (!field) return;
+
+        lfWkCalendarRoots().forEach(root => {
+            if (root.contains(field) && root === field.parentElement) return;
+
+            const pool = [root].concat(Array.from(root.querySelectorAll('div, table, section')));
+            pool.forEach(el => {
+                if (el.dataset && el.dataset.lfSysCal === '1') return;
+                if (!el.closest) return;
+                if (el.closest('.lf-wk, .lf-dd-cal, #lf-color-panel, .lf-et-modal')) return;
+                if (el.contains(field)) return;                 // never an ancestor of the field
+
+                const txt = (el.textContent || '');
+                if (txt.length > 900 || txt.length < 40) return;
+                if (!/\d{1,2}\s*\d{1,2}\s*\d{1,2}/.test(txt.replace(/[^\d]/g, ' '))) return;
+
+                if (lfWakeWeekdayCount(el) < 5) return;
+                if (lfWakeDayNodes(el).length < 20) return;
+
+                el.dataset.lfSysCal = '1';
+                el.classList.add('lf-sys-cal-parked');
+                el.setAttribute('aria-hidden', 'true');
+            });
+        });
+    }
+
+    function lfWkWatchSystemSheet() {
+        if (document.documentElement.dataset.lfWkSysWatch === '1') return;
+        document.documentElement.dataset.lfWkSysWatch = '1';
+
+        let queued = false;
+
+        new MutationObserver((muts) => {
+            // v100.9.127: a new input on the page means a form just opened, so the
+            // "not found" pause is lifted at once and the sheet is attached in the same
+            // frame. Without this the quick picks waited on the 1s miss cache plus the
+            // 500ms loop - up to a second and a half of nothing, and nothing at all if
+            // the dialog was closed again before that elapsed.
+            let formAppeared = false;
+            for (const m of muts) {
+                for (const n of m.addedNodes) {
+                    if (!n || n.nodeType !== 1) continue;
+                    if (n.tagName === 'INPUT' || (n.querySelector && n.querySelector('input'))) {
+                        formAppeared = true;
+                        break;
+                    }
+                }
+                if (formAppeared) break;
+            }
+
+            try { lfTodoCacheClear(); } catch (e) {}       // v100.9.140
+
+            if (formAppeared) {
+                lfWakeFieldMiss = 0;                       // look again right now
+                lfWakeFieldCache = null;
+                lfWkFieldsMiss = 0;
+                lfWkFieldsCache = [];
+                try { lfWakeQuickPicks(); } catch (e) {}
+            }
+
+            if (queued) return;
+            queued = true;
+            setTimeout(() => {
+                queued = false;
+                try { lfWkHideSystemSheet(true); } catch (e) {}
+            }, 120);
+        }).observe(document.body, { childList: true, subtree: true });
     }
 
     // ==========================================
@@ -6088,7 +8094,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.109</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.162</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -7282,6 +9288,7 @@
             // 0. Keep the Clean Paste suspension state machine updated (v100.8.38).
             // This must run continuously - the popup may be replaced by the compose
             // window BEFORE the user ever pastes, so arming can't wait for a paste event.
+            try { lfTodoCacheClear(); } catch (err) {}               // v100.9.140
             try { isCleanPasteSuspended(); } catch (err) {}
 
             // v100.9.28: before the selection guard on purpose. Nothing is inserted
@@ -7311,6 +9318,11 @@
             try { lfTodoColumns(); } catch (err) {}                  // v100.9.104
             try { lfApplyAllLoanOwners(); } catch (err) {}           // v100.9.73
             try { lfBiggerCheckboxes(); } catch (err) {}             // v100.9.90
+            try { lfWakeQuickPicks(); } catch (err) {}               // v100.9.116
+            try { lfWkWatchSystemSheet(); } catch (err) {}           // v100.9.120
+            try { lfWkHideSystemSheet(); } catch (err) {}            // v100.9.118
+            try { lfInitHideUser(); } catch (err) {}
+            try { lfApplyHideUser(); } catch (err) {}
             try { lfGsSync(); } catch (err) {}                       // v100.9.42
             try { lfEtInjectButton(); } catch (err) {}               // v100.9.52
 
