@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.166
+// @version      100.9.167
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.166 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.167 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3214,6 +3214,54 @@
                it completely. Now it always takes the same small amount of room and the
                row grows by that much - and the whole cell accepts a drop anyway, so
                the target is much bigger than the box looks. */
+            /* v100.9.167: the information mark beside MI, and its hover box */
+            .lf-mi-info {
+                position: relative;
+                display: inline-flex; align-items: center; justify-content: center;
+                width: 13px; height: 13px;
+                margin-right: 4px;
+                border: 1.3px solid currentColor;
+                border-radius: 50%;
+                font: 700 9px/1 Georgia, 'Times New Roman', serif;
+                font-style: italic;
+                opacity: .65;
+                cursor: help;
+                vertical-align: middle;
+            }
+            .lf-mi-info:hover { opacity: 1; }
+
+            .lf-mi-tip {
+                position: absolute;
+                bottom: calc(100% + 7px);
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 2147483000;
+                width: max-content;
+                max-width: 230px;
+                padding: 7px 10px;
+                background: #1f2937;
+                color: #f9fafb;
+                border-radius: 7px;
+                box-shadow: 0 6px 18px rgba(0,0,0,.26);
+                font: 600 10.5px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                font-style: normal;
+                text-align: left;
+                white-space: normal;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity .13s ease;
+                pointer-events: none;
+            }
+            .lf-mi-tip::after {
+                content: '';
+                position: absolute;
+                top: 100%; left: 50%;
+                transform: translateX(-50%);
+                border: 5px solid transparent;
+                border-top-color: #1f2937;
+            }
+            .lf-mi-info:hover .lf-mi-tip { opacity: 1; visibility: visible; }
+
             /* v100.9.166: the cell stays a real table-cell.
                v100.9.163 set display:flex on the <td> so the box could stretch. That
                takes the cell out of table layout: the row's background stops painting
@@ -3986,22 +4034,44 @@
                         loanCell.appendChild(miEl);
                     }
                     const miText = lfFmtMoney(mi.monthly) + '/mo';
+
+                    // v100.9.167: the figure is copied on its own - "208", not
+                    // "$208/mo". It is going into a rate sheet or a calculator, and the
+                    // currency sign and the "/mo" had to be deleted by hand every time.
+                    const miPlain = String(Math.round(mi.monthly));
+
                     if (miEl.dataset.lfVal !== miText) {
                         miEl.dataset.lfVal = miText;
-                        miEl.textContent = 'MI: ' + miText;
+                        miEl.textContent = '';
+
+                        // v100.9.167: an information mark, because this number is an
+                        // estimate and should be checked before it is quoted.
+                        const info = document.createElement('span');
+                        info.className = 'lf-mi-info';
+                        info.textContent = 'i';
+                        info.setAttribute('aria-label', 'About this figure');
+                        const tip = document.createElement('span');
+                        tip.className = 'lf-mi-tip';
+                        tip.textContent = 'auto-estimated, may not be correct, please double-check - from Jake with love';
+                        info.appendChild(tip);
+                        miEl.appendChild(info);
+
+                        miEl.appendChild(document.createTextNode('MI: ' + miText));
+
                         miEl.title = 'Mortgage insurance at ' + mi.label + ' a year on ' + lfFmtMoney(amt)
                             + (mi.coverage ? '\nFannie Mae required coverage: ' + mi.coverage + '% (Selling Guide B7-1-02)' : '');
+
                         const b = document.createElement('button');
                         b.className = 'lf-icon-btn lf-mi-copy';
                         b.type = 'button';
-                        b.title = 'Copy the mortgage insurance';
+                        b.title = 'Copy the mortgage insurance amount';
                         b.innerHTML = COPY_SVG;
                         b.onclick = async (e) => {
                             e.preventDefault(); e.stopPropagation();
                             try {
-                                await navigator.clipboard.writeText(miText);
+                                await navigator.clipboard.writeText(miPlain);
                                 b.innerHTML = CHECK_SVG; b.style.color = '#16a34a';
-                                showToast('Copied: ' + miText);
+                                showToast('Copied: ' + miPlain);
                                 setTimeout(() => { b.innerHTML = COPY_SVG; b.style.color = ''; }, 1000);
                             } catch (err) { showToast('Copy failed'); }
                         };
@@ -8146,7 +8216,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.166</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.167</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
