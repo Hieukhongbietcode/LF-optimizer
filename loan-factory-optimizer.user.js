@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.162
+// @version      100.9.166
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.162 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.166 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -2658,11 +2658,10 @@
                buttons on the to-do list so the script has a single button style. */
             .lf-wake-jumps {
                 display: flex;
-                flex-wrap: nowrap;                /* one row, always */
-                overflow-x: auto;                 /* ...and it scrolls rather than clips
-                                                     when a field has one shortcut more
-                                                     than the dialog is wide */
-                scrollbar-width: thin;
+                /* v100.9.164: wrap rather than scroll. A horizontal scrollbar inside a
+                   dialog is easy to miss, and the clipped shortcut simply looked
+                   broken - on a narrow dialog the row now continues underneath. */
+                flex-wrap: wrap;
                 align-items: stretch;
                 padding: 0;
                 margin: 6px 0 8px;
@@ -2684,8 +2683,6 @@
                 cursor: pointer; white-space: nowrap;
                 transition: background .12s ease, color .12s ease;
             }
-            .lf-wake-jumps::-webkit-scrollbar { height: 5px; }
-            .lf-wake-jumps::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 980px; }
             .lf-wake-jump { flex: none; }
             .lf-wake-jump:last-child { border-right: none; }
             .lf-wake-jump:hover { background: #fff3ea; color: #d95707; }
@@ -3217,27 +3214,35 @@
                it completely. Now it always takes the same small amount of room and the
                row grows by that much - and the whole cell accepts a drop anyway, so
                the target is much bigger than the box looks. */
+            /* v100.9.166: the cell stays a real table-cell.
+               v100.9.163 set display:flex on the <td> so the box could stretch. That
+               takes the cell out of table layout: the row's background stops painting
+               behind it, which is the white rectangle, and the cell's height stops
+               following the row, so the box had nothing to stretch into either. The
+               height is measured in script instead - see lfDropFitHeight. */
             td.lf-drop-cell { position: relative; }
             td.lf-drop-cell.lf-drop-over-cell { background: rgba(99, 102, 241, .10) !important; }
 
             .lf-drop-box {
-                display: flex; align-items: center; justify-content: center; gap: 4px;
+                display: flex; flex-direction: column;
+                align-items: center; justify-content: center; gap: 5px;
                 width: 100%; box-sizing: border-box;
-                margin-top: 5px; padding: 4px 6px;
-                min-height: 26px;
-                border: 1px dashed rgba(100, 116, 139, .5);
-                border-radius: 6px;
-                background: transparent;
-                color: rgba(71, 85, 105, .8);
-                font-size: 10px; font-weight: 600; line-height: 1.2;
+                margin-top: 6px; padding: 10px 8px;
+                min-height: 54px;
+                border: 1.5px dashed rgba(100, 116, 139, .45);
+                border-radius: 8px;
+                background: rgba(100, 116, 139, .035);
+                color: rgba(71, 85, 105, .85);
+                font-size: 11px; font-weight: 600; line-height: 1.25;
                 text-align: center; cursor: pointer; user-select: none;
-                white-space: nowrap;
+                white-space: normal;
                 transition: border-color .15s ease, background .15s ease, color .15s ease;
             }
-            .lf-drop-box svg { opacity: .6; flex: none; transition: opacity .15s ease; }
+            .lf-drop-box svg { opacity: .55; flex: none; width: 18px; height: 18px; transition: opacity .15s ease, transform .15s ease; }
+            .lf-drop-box:hover svg { transform: translateY(-1px); }
             .lf-drop-box .lf-drop-text { pointer-events: none; overflow: hidden; text-overflow: ellipsis; }
 
-            .lf-drop-box:hover { border-color: #6366f1; background: rgba(99,102,241,.07); color: #4f46e5; }
+            .lf-drop-box:hover { border-color: #6366f1; background: rgba(99,102,241,.08); color: #4f46e5; }
             .lf-drop-box:hover svg { opacity: 1; }
 
             .lf-drop-box.lf-drop-over {
@@ -4198,6 +4203,38 @@
             // the flash of two calendars at once.
             attributes: true,
             attributeFilter: ['style', 'class', 'hidden']
+        });
+    }
+
+    // v100.9.166: the box is sized to the space actually left in the cell.
+    //
+    // CSS alone cannot do this: a table cell's height comes from the tallest cell in
+    // its row, and a child cannot read that without the cell being taken out of table
+    // layout - which is what broke the row background last time. Measuring is the
+    // honest way round it.
+    //
+    // Only written when it differs by more than 2px, so a steady layout costs one
+    // measurement per pass and no style writes at all.
+    function lfDropFitHeight() {
+        document.querySelectorAll('td.lf-drop-cell').forEach(cell => {
+            const box = cell.querySelector('.lf-drop-box');
+            if (!box || !box.offsetParent) return;
+
+            const cellRect = cell.getBoundingClientRect();
+            const boxRect = box.getBoundingClientRect();
+            if (!cellRect.height || !boxRect.height) return;
+
+            const style = typeof getComputedStyle === 'function' ? getComputedStyle(cell) : null;
+            const padBottom = style ? (parseFloat(style.paddingBottom) || 0) : 6;
+
+            const avail = Math.floor(cellRect.bottom - padBottom - boxRect.top);
+            if (avail < 54) {                       // nothing spare - keep the minimum
+                if (box.style.height) box.style.removeProperty('height');
+                return;
+            }
+
+            const current = parseFloat(box.style.height) || 0;
+            if (Math.abs(current - avail) > 2) box.style.height = avail + 'px';
         });
     }
 
@@ -7685,14 +7722,29 @@
     // again. That helper is gone and this rebuilds whenever the form redraws.
     // v100.9.129: one bar per field. A single shared lookup meant the second dialog
     // field found the first field's bar and skipped making its own.
+    // v100.9.164: one strip per field, tied to the field itself.
+    //
+    // The check used to be "is there already a strip inside this field's surrounding
+    // box". On a dialog like UPDATE LOAN, several date fields share one surrounding
+    // box, so the test found a neighbour's strip and sometimes built a second one
+    // anyway - which is how two identical rows of shortcuts ended up stacked under the
+    // first field. The strip now belongs to its input and nothing else can stand in
+    // for it.
     function lfWkEnsureJumpBar(input, box) {
-        if (!input.offsetParent) return;          // v100.9.156: not on screen, nothing to add to
-        const scope = input.closest('.form-group, .grp, .row') || input.parentElement.parentElement;
-        const existing = scope ? scope.querySelector('.lf-wake-jumps') : null;
-        if (existing && existing.offsetParent) return;
-        if (existing) existing.remove();
+        if (!input.offsetParent) return;          // not on screen, nothing to add to
+
+        const mine = input._lfWkBar;
+        if (mine && mine.isConnected && mine.offsetParent) return;
+        if (mine && mine.parentNode) mine.remove();
+
+        // clear anything previously built for this same field
+        document.querySelectorAll('.lf-wake-jumps').forEach(b => {
+            if (b._lfWkInput === input) b.remove();
+        });
+
         const bar = lfWkJumpBar(input, (d) => box._lfPick(d));
         bar._lfWkInput = input;
+        input._lfWkBar = bar;
         lfWkPlaceJumpBar(input, bar);
     }
 
@@ -8094,7 +8146,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.162</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.166</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -9311,7 +9363,8 @@
             // 0.9 "Pop-up" button on the Escalation desk loan summary (v100.8.84)
             try { lfInjectSummaryPopupBtn(); } catch (err) {}
             try { lfInjectRealEstateCopyButtons(); } catch (err) {}  // v100.9.29
-            try { lfInjectTodoDropZones(); } catch (err) {}          // v100.9.36
+            try { lfInjectTodoDropZones(); } catch (err) {}
+            try { lfDropFitHeight(); } catch (err) {}                // v100.9.166          // v100.9.36
             try { lfWatchDropZones(); } catch (err) {}               // v100.9.97
             try { lfTodoSelectTools(); } catch (err) {}              // v100.9.98
             try { lfTodoReadability(); } catch (err) {}              // v100.9.103
@@ -9653,6 +9706,23 @@
             if (triggered) { e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
 
+        // v100.9.165: Escape closes the panel too, and took the note with it.
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            if (!isNoteDirty() || isSavingOrEmailing) return;
+            if (event.target && event.target.closest &&
+                event.target.closest('#lf-confirm-dialog, #lf-color-panel')) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+            showConfirmDialog(() => {
+                const ed = document.querySelector('.note-editable, textarea[name*="note"], textarea[id*="note"]');
+                if (ed) { if (ed.tagName === 'TEXTAREA') ed.value = ''; else ed.innerHTML = ''; }
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            });
+        }, true);
+
         // Click handler for Discard Protection
         // (v100.8.32) Now covers TWO scenarios:
         //   A) Closing a modal (X button / backdrop click) - original behavior
@@ -9665,7 +9735,34 @@
             if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button === 1) return;
             const btn = event.target.closest('button, a, input');
             if (btn) { const t = (btn.textContent||btn.value||'').toLowerCase(); if(t.includes('save')||t.includes('email')||t.includes('submit')){ isSavingOrEmailing=true; setTimeout(()=>isSavingOrEmailing=false, 2000); return; } }
-            const tgt = event.target, isC = tgt.closest('[data-dismiss="modal"]') || tgt.closest('.close') || tgt.classList.contains('close'), isB = tgt.classList.contains('modal') && tgt.classList.contains('show');
+            const tgt = event.target;
+            let isC = tgt.closest('[data-dismiss="modal"]') || tgt.closest('.close') || tgt.classList.contains('close');
+            let isB = tgt.classList.contains('modal') && tgt.classList.contains('show');
+
+            // v100.9.165: the grey area around a panel counts as closing it.
+            //
+            // Backdrops were only recognised by the class pair .modal.show. The note
+            // panel's backdrop carries neither, so clicking beside the panel - which is
+            // how it is closed, there being no X - fell straight through the guard and
+            // the typed note went with it.
+            //
+            // A backdrop is whatever element wraps the panel and was clicked outside of
+            // it, which holds whatever it happens to be called.
+            if (!isC && !isB) {
+                const ed = Array.from(document.querySelectorAll('.note-editable, textarea[name*="note"], textarea[id*="note"]'))
+                    .find(e => e.offsetParent || (e.offsetWidth > 0 && e.offsetHeight > 0));
+
+                // A backdrop is identified by what it does, not what it is called: it
+                // wraps the editor and covers the screen. Naming the panel's class was
+                // the mistake in the first attempt - the portal's note panel uses none
+                // of the usual ones.
+                if (ed && tgt !== ed && tgt.contains(ed)) {
+                    const r = tgt.getBoundingClientRect();
+                    const w = window.innerWidth || document.documentElement.clientWidth || 0;
+                    const h = window.innerHeight || document.documentElement.clientHeight || 0;
+                    if (w && h && r.width >= w * 0.9 && r.height >= h * 0.9) isB = true;
+                }
+            }
             if (isB && mousedownTarget && mousedownTarget !== tgt) return;
             if ((isC || isB) && isNoteDirty()) {
                 if (isSavingOrEmailing) return;
