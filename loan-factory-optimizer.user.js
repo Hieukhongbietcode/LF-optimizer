@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.167
+// @version      100.9.171
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.167 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.171 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -7083,7 +7083,18 @@
         label.textContent = 'Time';
         row.appendChild(label);
 
-        const remember = () => onChange();
+        // v100.9.169: the hour, the minute and AM/PM are one decision, so the field is
+        // written once the three have settled rather than after each of them. Picking
+        // an hour used to fire immediately, mid-way through choosing a time.
+        let settle = null;
+        const remember = () => {
+            clearTimeout(settle);
+            row.classList.add('editing');
+            settle = setTimeout(() => {
+                row.classList.remove('editing');
+                onChange();
+            }, 900);
+        };
 
         [hour, min].forEach(sel => {
             sel.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -7272,6 +7283,87 @@
     }
 
     let lfWkPendingTime = null;
+
+    // v100.9.169: changing the time must not touch the calendar.
+    //
+    // A time change ran the full date-picking routine: scan every calendar-like element
+    // on the page, press its arrows up to thirty-six times, click a day. When one of
+    // those candidates is not really a calendar, those synthetic clicks land on
+    // whatever is underneath - which is how choosing an hour closed the whole dialog.
+    //
+    // The date is already set by then. Only the time needs writing, and flatpickr will
+    // take it directly.
+    // v100.9.170: the time is set on flatpickr's own controls, not through its API.
+    //
+    // A userscript runs in an isolated world, so the instance the page hangs on the
+    // input as `_flatpickr` is invisible from here - lfWkFlatpickr has been returning
+    // null all along. The date worked anyway because a day cell was clicked; the time
+    // fell through to typing, which the form ignores, so submit kept saving 12:00 PM.
+    //
+    // flatpickr's hour and minute are ordinary inputs and AM/PM is a span it toggles
+    // on click, all of them inside the calendar we already drive.
+    function lfWkSetTimeOnCalendar(cal, time) {
+        if (!cal) return false;
+
+        const hourEl = cal.querySelector('.flatpickr-hour, input.flatpickr-hour');
+        const minEl = cal.querySelector('.flatpickr-minute, input.flatpickr-minute');
+        if (!hourEl || !minEl) return false;
+
+        const wasParked = cal.classList.contains('lf-sys-cal-parked');
+        if (wasParked) cal.classList.remove('lf-sys-cal-parked');
+
+        try {
+            const ampmEl = cal.querySelector('.flatpickr-am-pm');
+            const want = String(time.a).toUpperCase();
+
+            // a 24-hour picker has no AM/PM span, so the hour is converted for it
+            let h = parseInt(time.h, 10) % 12;
+            if (!ampmEl && /PM/.test(want)) h += 12;
+            if (!ampmEl && h === 0) h = 0;
+
+            const write = (el, val) => {
+                const proto = Object.getPrototypeOf(el);
+                const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                if (desc && desc.set) desc.set.call(el, val); else el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+
+            write(hourEl, ampmEl ? String(parseInt(time.h, 10)) : String(h).padStart(2, '0'));
+            write(minEl, String(parseInt(time.m, 10)).padStart(2, '0'));
+
+            if (ampmEl && (ampmEl.textContent || '').trim().toUpperCase() !== want) {
+                lfWkRealClick(ampmEl);
+            }
+
+            // flatpickr commits a typed time on blur
+            hourEl.dispatchEvent(new Event('blur', { bubbles: true }));
+            minEl.dispatchEvent(new Event('blur', { bubbles: true }));
+            return true;
+        } catch (e) {
+            return false;
+        } finally {
+            if (wasParked) cal.classList.add('lf-sys-cal-parked');
+        }
+    }
+
+    function lfWkApplyTimeOnly(input, d, time) {
+        // the calendar flatpickr is actually using for this field
+        const cal = document.querySelector('.flatpickr-calendar.hasTime') ||
+                    document.querySelector('.flatpickr-calendar');
+        if (lfWkSetTimeOnCalendar(cal, time)) return;
+
+        const fp = lfWkFlatpickr(input);                 // only if the page exposes it
+        if (fp && typeof fp.setDate === 'function') {
+            const when = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            let h = parseInt(time.h, 10) % 12;
+            if (/pm/i.test(time.a)) h += 12;
+            when.setHours(h, parseInt(time.m, 10) || 0, 0, 0);
+            try { fp.setDate(when, true); return; } catch (e) {}
+        }
+
+        lfWakeSetDate(input, d, time);                   // last resort - text only
+    }
 
     function lfWkApplyDate(input, d, time, after) {
         lfWkPendingTime = time || null;
@@ -7654,8 +7746,18 @@
         });
 
         if (lfWkWantsTime(input)) {
+            // v100.9.168: changing the time rewrites whatever date the field holds.
+            //
+            // This used to act only on a date picked inside this sheet. Open the picker
+            // on a field that already has a date - set earlier, or on a previous visit -
+            // and state.selected is empty, so choosing 9 PM changed nothing and the
+            // field sat there still reading 12:00:00 PM. The date in the field is just
+            // as real as one clicked here, so it is read back when needed.
             box.appendChild(lfWkTimeRow(state, () => {
-                if (state.selected) lfWkApplyDate(input, state.selected, state.time(), null);
+                const d = state.selected || lfWkParseValue(input.value);
+                if (!d) return;
+                state.selected = d;
+                lfWkApplyTimeOnly(input, d, state.time());
             }));
         }
 
@@ -7940,9 +8042,22 @@
     //
     // The cost is kept down by looking only where a calendar can actually be: inside
     // the dialog, and in the handful of elements mounted directly under <body>.
+    // v100.9.171: any dialog date field counts, not only "Wakeup date".
+    //
+    // The sweep that parks the portal's calendar asked lfWakeField() for a field, and
+    // that function matches the label "Wakeup date" alone. On UPDATE LOAN - VVOE
+    // expiration, expected signing, expected funding - it found nothing and returned
+    // before parking anything, so the portal's calendar stayed on screen underneath
+    // ours. Our sheet attaches to every dialog date field, so this has to as well.
+    function lfWkAnyDateField() {
+        const fields = lfWkDateFields();
+        if (fields.length) return fields[0];
+        return lfWakeField();
+    }
+
     function lfWkCalendarRoots() {
         const roots = [];
-        const field = lfWakeField();
+        const field = lfWkAnyDateField();
         if (field) {
             const dlg = field.closest('[role="dialog"], .modal, .modal-content, .popup, form');
             if (dlg) roots.push(dlg);
@@ -7961,7 +8076,7 @@
         if (!force && now - lfWkLastSweep < 250) return;
         lfWkLastSweep = now;
 
-        const field = lfWakeField();
+        const field = lfWkAnyDateField();
         if (!field) return;
 
         lfWkCalendarRoots().forEach(root => {
@@ -8216,7 +8331,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.167</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.171</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
