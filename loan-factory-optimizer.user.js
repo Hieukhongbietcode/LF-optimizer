@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.171
+// @version      100.9.173
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.171 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.173 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -3214,6 +3214,13 @@
                it completely. Now it always takes the same small amount of room and the
                row grows by that much - and the whole cell accepts a drop anyway, so
                the target is much bigger than the box looks. */
+            /* v100.9.172: the clipboard hint sits in the placeholder, faintly */
+            input.lf-gs-hinting::placeholder {
+                color: #94a3b8;
+                opacity: .75;
+                font-style: italic;
+            }
+
             /* v100.9.167: the information mark beside MI, and its hover box */
             .lf-mi-info {
                 position: relative;
@@ -4490,6 +4497,141 @@
         if (lfGsIndex >= badges.length) lfGsIndex = 0;
         if (!badges.some(b => b.classList.contains('lf-gs-active'))) lfGsPaint(badges, lfGsIndex);
     }
+
+    // ==========================================
+    // CLIPBOARD HINT IN GLOBAL SEARCH (v100.9.172)
+    //
+    // Most searches start by copying a loan number from somewhere and pasting it here.
+    // The clipboard is shown as the placeholder, so Enter on an empty box searches for
+    // it and the paste step disappears.
+    //
+    // It is a placeholder, not a value: the box stays empty, so typing or pasting
+    // replaces it with nothing to delete first. Only Enter on an empty box uses it.
+    //
+    // Reading the clipboard needs the document focused and a user gesture, which is
+    // why it is read at the moment the search is opened - a click or the hotkey - and
+    // never on a timer. A refusal is left alone; the normal placeholder stays.
+    // ==========================================
+    let lfGsHintText = '';
+
+    function lfGsShortenHint(text) {
+        const one = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!one) return '';
+        return one.length > 12 ? one.slice(0, 12) + '...' : one;
+    }
+
+    function lfGsApplyHint(input) {
+        if (!input || !lfGsHintText) return;
+        if (!input.dataset.lfGsOrigPh) {
+            input.dataset.lfGsOrigPh = input.getAttribute('placeholder') || '';
+        }
+        input.setAttribute('placeholder', lfGsShortenHint(lfGsHintText));
+        input.classList.add('lf-gs-hinting');
+    }
+
+    function lfGsClearHint(input) {
+        if (!input) return;
+        if (input.dataset.lfGsOrigPh !== undefined) {
+            input.setAttribute('placeholder', input.dataset.lfGsOrigPh);
+        }
+        input.classList.remove('lf-gs-hinting');
+        lfGsHintText = '';
+    }
+
+    // Called from the click or the hotkey, so the gesture is still live.
+    function lfGsLoadClipboardHint(input) {
+        if (!input || !navigator.clipboard || !navigator.clipboard.readText) return;
+        navigator.clipboard.readText().then(text => {
+            const one = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!one) return;
+            if (input.value) return;                 // the box already has something
+            lfGsHintText = one;
+            lfGsApplyHint(input);
+        }).catch(() => {});                          // refused - leave the box as it was
+    }
+
+    // v100.9.173: the box is found by what it is, not by one id.
+    //
+    // The previous version bound to #a__search, an id taken from the hotkey handler.
+    // That is the collapsed trigger; the box that actually appears is a different
+    // element, so the hint was attached to something the user never types into and
+    // nothing changed on screen.
+    //
+    // Binding happens on focus, wherever it lands: if a text input has the search
+    // box's own placeholder, that is the search box, whatever it is called.
+    const LF_GS_PH_RX = /name.*email|email.*address|address.*phone|search/i;
+
+    function lfGsIsSearchBox(el) {
+        if (!el || el.tagName !== 'INPUT') return false;
+        if (el.type && !/^(text|search)$/i.test(el.type)) return false;
+        if (el.id === 'a__search') return true;
+
+        const ph = el.getAttribute('placeholder') || el.dataset.lfGsOrigPh || '';
+        if (LF_GS_PH_RX.test(ph)) return true;
+
+        const box = el.closest('#a__search_intro, .search-box, .global-search, [class*="search" i]');
+        return !!box;
+    }
+
+    function lfGsBindHint() {
+        if (document.documentElement.dataset.lfGsHintBound === '1') return;
+        document.documentElement.dataset.lfGsHintBound = '1';
+
+        // focusin carries the gesture that makes reading the clipboard permitted
+        document.addEventListener('focusin', (e) => {
+            const input = e.target;
+            if (!lfGsIsSearchBox(input)) return;
+            lfGsBindOne(input);
+            lfGsLoadClipboardHint(input);
+        }, true);
+
+        document.addEventListener('mousedown', (e) => {
+            const input = e.target && e.target.closest ? e.target.closest('input') : null;
+            if (!lfGsIsSearchBox(input)) return;
+            lfGsBindOne(input);
+            lfGsLoadClipboardHint(input);
+        }, true);
+    }
+
+    function lfGsBindOne(input) {
+        if (input.dataset.lfGsHintOn === '1') return;
+        input.dataset.lfGsHintOn = '1';
+
+        input.addEventListener('input', () => { if (input.value) lfGsClearHint(input); });
+        input.addEventListener('blur', () => lfGsClearHint(input));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            if (input.value || !lfGsHintText) return;
+
+            const text = lfGsHintText;
+            lfGsClearHint(input);
+
+            const proto = Object.getPrototypeOf(input);
+            const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+            if (desc && desc.set) desc.set.call(input, text); else input.value = text;
+
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            // this same Enter carries on to the page, now with the text in place
+        }, true);
+    }
+
+    // v100.9.173: type lfGsHint() in the console to see what it found.
+    window.lfGsHint = function () {
+        const inputs = Array.from(document.querySelectorAll('input'))
+            .filter(i => i.offsetParent);
+        console.log('[LF] visible inputs:', inputs.length);
+        inputs.forEach((i, n) => {
+            console.log('  #' + n,
+                '| id:', i.id || '(none)',
+                '| placeholder:', JSON.stringify(i.getAttribute('placeholder')),
+                '| treated as search:', lfGsIsSearchBox(i),
+                '| hint bound:', i.dataset.lfGsHintOn === '1');
+        });
+        console.log('[LF] clipboard hint held:', JSON.stringify(lfGsHintText));
+        return inputs.length;
+    };
 
     function lfGsKeyHandler(e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -8331,7 +8473,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.171</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.173</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -9561,7 +9703,8 @@
             try { lfWkHideSystemSheet(); } catch (err) {}            // v100.9.118
             try { lfInitHideUser(); } catch (err) {}
             try { lfApplyHideUser(); } catch (err) {}
-            try { lfGsSync(); } catch (err) {}                       // v100.9.42
+            try { lfGsSync(); } catch (err) {}
+            try { lfGsBindHint(); } catch (err) {}                   // v100.9.172                       // v100.9.42
             try { lfEtInjectButton(); } catch (err) {}               // v100.9.52
 
             // 1.0 Escalation desk copy buttons: borrower name + loan number (v100.8.85)
@@ -9811,7 +9954,11 @@
                 const aEl = document.activeElement; if (aEl && (aEl.tagName === 'INPUT' || aEl.tagName === 'TEXTAREA' || aEl.isContentEditable)) return;
                 e.preventDefault();
                 const si = document.getElementById('a__search'), st = document.querySelector('#a__search_intro a');
-                if (si) { if(si.offsetWidth===0 || si.style.display==='none'){ if(st) st.click(); } setTimeout(()=>si.focus(), 100); }
+                if (si) {
+                    if(si.offsetWidth===0 || si.style.display==='none'){ if(st) st.click(); }
+                    try { lfGsBindHint(); lfGsLoadClipboardHint(si); } catch (err) {}   // v100.9.172
+                    setTimeout(()=>si.focus(), 100);
+                }
                 else if (st) st.click();
             }
 
