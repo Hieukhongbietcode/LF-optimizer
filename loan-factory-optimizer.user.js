@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.173
+// @version      100.9.174
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.173 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.174 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -7960,7 +7960,23 @@
     // "Funded Date" on UPDATE LOAN is the same job with the same awkward calendar, and
     // so is any other date the portal asks for in a dialog. Fields are matched by their
     // own label ending in "date", which is how the portal names all of them.
-    const LF_WK_DATE_LABEL = /(^|\s)(wake\s*-?\s*up|funded|closed|closing|lock|locked|expiration|signing|disbursement|received|sent|start|end|due)?\s*date(\s|:|$)/i;
+    // v100.9.174: a date field is recognised by its value as well as its label.
+    //
+    // The label pattern required the word "date" at the end, so "Lock Expiration" was
+    // not matched and that field got no calendar while "Locked date" right above it
+    // did. Listing more words would only move the problem to the next label the portal
+    // words differently - a field already holding 11/30/2026 is a date field whatever
+    // its label says.
+    const LF_WK_DATE_LABEL = /(^|\s)(wake\s*-?\s*up|funded|closed|closing|lock|locked|expiration|expires|signing|disbursement|received|sent|start|end|due|deadline)?\s*(date|expiration|expires|deadline)(\s|:|$)/i;
+
+    const LF_WK_DATE_VALUE = /^\s*\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|^\s*\d{4}-\d{1,2}-\d{1,2}/;
+
+    function lfWkLooksLikeDateField(input) {
+        if (!input) return false;
+        if (input.type && !/^(text|date|search)$/i.test(input.type)) return false;
+        return LF_WK_DATE_VALUE.test(input.value || '') ||
+               LF_WK_DATE_VALUE.test(input.getAttribute('placeholder') || '');
+    }
 
     let lfWkFieldsCache = [];
     let lfWkFieldsMiss = 0;
@@ -8000,7 +8016,12 @@
                 if (label.children.length) return;
                 if (!label.offsetParent) return;
                 const txt = (label.textContent || '').replace(/\s+/g, ' ').trim();
-                if (txt.length > 40 || !LF_WK_DATE_LABEL.test(txt)) return;
+                if (txt.length > 40) return;
+                if (!LF_WK_DATE_LABEL.test(txt)) {
+                    // the label does not say "date" - look at what the field holds
+                    const near = (label.parentElement || label).querySelector('input');
+                    if (!lfWkLooksLikeDateField(near)) return;
+                }
 
                 let node = label;
                 for (let up = 0; up < 4 && node; up++) {
@@ -8473,7 +8494,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.173</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.174</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
