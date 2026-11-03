@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.174
+// @version      100.9.175
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.174 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.175 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -66,11 +66,14 @@
     // Pacific, which is a 9-5 day on the east coast. No timezone conversion happens,
     // so nothing else in the script has to change.
     // ==========================================
+    // v100.9.175: Mountain removed, West Coast moved to 8:00-5:00 PST.
+    //
+    // Anyone who had Mountain selected falls back to West Coast, and since West Coast
+    // now runs the same 8:00 to 5:00, their due dates come out unchanged.
     const LF_TT_SHIFTS = {
         east:     { label: 'East Coast',  start: 6,  end: 15, note: '6:00 AM \u2013 3:00 PM PST' },
         central:  { label: 'Central',     start: 7,  end: 16, note: '7:00 AM \u2013 4:00 PM PST' },
-        mountain: { label: 'Mountain',    start: 8,  end: 17, note: '8:00 AM \u2013 5:00 PM PST' },
-        west:     { label: 'West Coast',  start: 9,  end: 18, note: '9:00 AM \u2013 6:00 PM PST' }
+        west:     { label: 'West Coast',  start: 8,  end: 17, note: '8:00 AM \u2013 5:00 PM PST' }
     };
     const LF_TT_SHIFT_KEY = 'lf_tt_shift';
 
@@ -1379,7 +1382,9 @@
         return false;
     }
 
-    function lfTtEnabled() { return localStorage.getItem(LF_TT_ENABLED_KEY) !== 'false'; } // default ON
+    // v100.9.175: off unless switched on. Anyone who already turned it on keeps it:
+    // their stored 'true' still reads as on.
+    function lfTtEnabled() { return localStorage.getItem(LF_TT_ENABLED_KEY) === 'true'; } // default OFF
     function lfTtRole() { return LF_TT_RULES[localStorage.getItem(LF_TT_ROLE_KEY)] ? localStorage.getItem(LF_TT_ROLE_KEY) : 'underwriter'; }
     function lfTtRule() { return LF_TT_RULES[lfTtRole()]; }
     // Active only when switched on AND the selected role actually has rules defined
@@ -8494,7 +8499,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.174</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.175</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
