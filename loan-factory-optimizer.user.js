@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Combined Loan Factory Optimizer & Suite (Unified Architecture)
 // @namespace    http://tampermonkey.net/
-// @version      100.9.175
+// @version      100.9.181
 // @description  Update Sept 29th, 2026 — Combined Optimizer, Discard (incl. Navigation Discard Protection), Nav Customizer, Docs Shortcuts, Employment Copy, Auto-Nav, Auto-Availability, Liabilities Copier (skips $0/$0 rows) + Liabilities Column Sorting, Financials Copier, Pipeline Sorting, Phone Formatting, Absolute Scroll Suppression, and Clean Paste.
 // @author       Jake Tran
 // @match        *://*.loanfactory.com/*
@@ -25,7 +25,7 @@
 (function() {
     'use strict';
 
-    console.log('%c[LF Optimizer] v100.9.175 loaded', 'color:#f36f20;font-weight:bold;');
+    console.log('%c[LF Optimizer] v100.9.181 loaded', 'color:#f36f20;font-weight:bold;');
 
     // ==========================================
     // DESIGN TOKENS (v100.9.41)
@@ -1397,6 +1397,7 @@
         document.querySelectorAll('tr[data-due-date]').forEach(r => {
             delete r.dataset.dueDate; delete r.dataset.dueDateFormatted;
             delete r.dataset.slaDueRaw;          // v100.9.18: force a full recalculation
+            delete r.dataset.lfSortCreated;      // v100.9.176
         });
         // v100.9.18: the disclose-due chips belong to Disclosure Specialist. On a role
         // change, drop them and let the row chips be rebuilt for the new role.
@@ -2330,12 +2331,132 @@
         }
     }
 
-    function sortTableByTurnTime(asc) {
-        // v100.9.6: give the app a moment to process a click before re-sorting
-        if (Date.now() - lfOrderRestoredAt < 1200) return;
-        const tbody = document.querySelector('table tbody');
-        const thead = document.querySelector('table thead');
-        if (!tbody || !thead) return;
+    // v100.9.181: deciding whether a row is "New", without trusting the header.
+    //
+    // The status cell holds the chosen value AND the dropdown's full list of choices.
+    // Read as one string that becomes "NewIn progressWaiting for..." - and /^new\b/
+    // fails on it, because there is no word boundary between "New" and "In". Every row
+    // therefore counted as not-New, the New group came out empty, the list was left
+    // exactly as it was, and the sort looked dead.
+    //
+    // It also relied on finding a "Status" header in the row's own table. The desk
+    // keeps its headers in a separate table, so that lookup returned nothing and the
+    // fallback was the merged string above.
+    //
+    // This reads the selected value from the control itself, and only falls back to
+    // text when there is no control to read.
+    const LF_TT_STATUSES = ['new', 'in progress', 'waiting for further information',
+                            'completed', 'cancelled', 'canceled', 'on hold', 'resolved'];
+
+    function lfRowIsNew(row, statusIdx) {
+        const cells = row.cells ? Array.from(row.cells) : [];
+        const scope = (statusIdx > -1 && cells[statusIdx]) ? cells[statusIdx] : row;
+
+        // a real <select> knows its own value
+        const sel = scope.querySelector('select');
+        if (sel && sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]) {
+            return /^new\b/i.test((sel.options[sel.selectedIndex].text || '').trim());
+        }
+
+        // otherwise the chosen value is the one element showing a status on its own
+        const nodes = Array.from(scope.querySelectorAll('button, a, span, div, li'));
+        for (const el of nodes) {
+            if (el.closest('.dropdown-menu, [role="menu"], [role="listbox"], ul, ol')) continue;
+            const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/\s*[\u25be\u25bc\u2193]\s*$/, '');
+            if (!t || t.length > 40) continue;
+            if (LF_TT_STATUSES.indexOf(t) > -1) return t === 'new';
+        }
+
+        // last resort: the cell's text with the choice list stripped out
+        const clone = scope.cloneNode(true);
+        clone.querySelectorAll('select, option, optgroup, datalist, ul, ol, .dropdown-menu, [role="menu"], [role="listbox"]').forEach(e => e.remove());
+        const txt = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        return /^new\b/i.test(txt);
+    }
+
+    let lfSortBailReason = '';
+    let lfSortWatchOn = false;
+    let lfSortApplying = false;
+    let lfSortLastCounts = null;
+
+    // v100.9.179: the portal rebuilds its rows constantly, which throws away any order
+    // we applied. Re-applying only every 1500ms means the list spends most of its time
+    // back in the portal's order - and looks like the sort never worked. This puts it
+    // back within a frame of the rebuild.
+    function lfSortWatchTable() {
+        if (lfSortWatchOn) return;
+        const tbody = Array.from(document.querySelectorAll('table tbody'))
+            .map(tb => ({ tb, n: Array.from(tb.rows).filter(r => r.cells.length > 1).length }))
+            .sort((a, b) => b.n - a.n)
+            .map(x => x.tb)[0];
+        if (!tbody) return;
+
+        lfSortWatchOn = true;
+        let queued = false;
+        new MutationObserver(() => {
+            // v100.9.179: our own re-ordering changes childList too. Without this the
+            // observer would answer its own mutation for ever, which is a frozen tab.
+            if (lfSortApplying || !currentCustomSort || queued) return;
+            queued = true;
+            requestAnimationFrame(() => {
+                queued = false;
+                try { sortTableByTurnTime(currentCustomSort === 'asc', true); } catch (e) {}
+            });
+        }).observe(tbody, { childList: true });
+    }
+
+    // Type lfSortWhy() in the console to see what the last attempt did.
+    window.lfSortWhy = function () {
+        const bodies = Array.from(document.querySelectorAll('table tbody'))
+            .map(tb => ({ tb, rows: Array.from(tb.rows).filter(r => r.cells.length > 1).length }));
+        console.log('[LF] tbodies on page:', bodies.length);
+        bodies.forEach((b, i) => console.log('  #' + i, 'rows with cells:', b.rows));
+        console.log('[LF] currentCustomSort:', typeof currentCustomSort !== 'undefined' ? currentCustomSort : '(undefined)');
+        console.log('[LF] last bail reason:', lfSortBailReason || '(none - it ran)');
+        console.log('[LF] ms since order restore:', Date.now() - lfOrderRestoredAt);
+        const chosen = bodies.slice().sort((a, b) => b.rows - a.rows)[0];
+        if (chosen) {
+            const withDue = Array.from(chosen.tb.rows).filter(r => r.dataset.dueDate).length;
+            console.log('[LF] chosen tbody rows with a due date:', withDue, 'of', chosen.rows);
+
+            // what the status reader actually sees on the first few rows
+            const sample = Array.from(chosen.tb.rows).filter(r => r.cells.length > 1).slice(0, 5);
+            sample.forEach((r, i) => {
+                let st = '';
+                try { st = lfRowStatusText(r); } catch (e) { st = '(threw)'; }
+                console.log('  row ' + i + ' status read as:', JSON.stringify(st),
+                            '| counts as New:', /^new\b/i.test(st));
+            });
+        }
+        console.log('[LF] last split - New / other / total:',
+            lfSortLastCounts ? (lfSortLastCounts.isNew + ' / ' + lfSortLastCounts.other + ' / ' + lfSortLastCounts.total) : '(not run yet)');
+        return lfSortBailReason || 'ran';
+    };
+
+    // v100.9.179: `force` is set when the user picks a direction by hand.
+    //
+    // The 1200ms pause exists so the app can finish handling a click before the rows
+    // move under it. But choosing ASC from the menu IS a click, and the pause was
+    // swallowing the very sort it had just been asked for - the label changed to ASC
+    // and the list stayed exactly as it was.
+    function sortTableByTurnTime(asc, force) {
+        if (!force && Date.now() - lfOrderRestoredAt < 1200) return;
+        lfSortBailReason = '';
+        // v100.9.178: the ticket table is picked by having ticket rows in it.
+        //
+        // This took document.querySelector('table tbody') - the FIRST table on the
+        // page. The desk renders more than one, and when the first one is a header-only
+        // or filter table its tbody is empty, so the function returned at the row count
+        // and the sort silently did nothing however many times it was pressed.
+        const tbody = Array.from(document.querySelectorAll('table tbody'))
+            .map(tb => ({ tb, n: Array.from(tb.rows).filter(r => r.cells.length > 1).length }))
+            .sort((a, b) => b.n - a.n)
+            .map(x => x.tb)[0];
+        if (!tbody) { lfSortBailReason = 'no tbody with ticket rows'; return; }
+
+        const table = tbody.closest('table');
+        const thead = (table && table.querySelector('thead')) || document.querySelector('table thead');
+        if (!thead) { lfSortBailReason = 'no thead'; return; }
 
         const headers = Array.from(thead.querySelectorAll('th, td')).map(h => (h.textContent || '').toLowerCase().trim());
         const statusIdx = headers.findIndex(h => h.includes('status'));
@@ -2354,12 +2475,45 @@
         } catch (e) {}
 
         const rows = Array.from(tbody.querySelectorAll('tr'));
-        if (rows.length === 0 || !rows.some(r => r.dataset.dueDate)) return;
+        if (rows.length === 0) { lfSortBailReason = 'tbody has no rows'; return; }
 
         const dataRows = rows.filter(r => !r.querySelector('th') && !r.classList.contains('header'));
+
+        // v100.9.176: sorting no longer depends on the turn-time feature being on.
+        //
+        // The order came from data-due-date, which only exists while Tickets Turn-time
+        // is switched on and has stamped every row. With it off there were no due dates
+        // at all, the function returned at the first check, and the list kept whatever
+        // order the portal gave it - so choosing ASC or DESC appeared to do nothing.
+        //
+        // When a row has no due date its created time is used instead. Ordering by
+        // "when it came in" is the same ordering the SLA produces for tickets sharing a
+        // rule, and unlike the due date it is present on every row and carries the full
+        // date - which is why the old behaviour only ever looked right within one day.
+        const CREATED_RX = /(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])\/\d{4}(?:[\s,]+(0?[1-9]|1[0-2]):\d{1,2}(?::\d{1,2})?\s*(AM|PM))?/i;
+
+        const rowCreatedMs = (row) => {
+            if (row.dataset.lfSortCreated) return parseInt(row.dataset.lfSortCreated) || 0;
+            let ms = 0;
+            for (const cell of Array.from(row.cells || [])) {
+                const m = (cell.innerText || '').match(CREATED_RX);
+                if (!m) continue;
+                const t = new Date(normalizeDateStr(m[0].replace(/\n/g, ' '))).getTime();
+                if (!isNaN(t)) { ms = t; break; }
+            }
+            row.dataset.lfSortCreated = String(ms);
+            return ms;
+        };
+
+        const sortKey = (row) => {
+            const due = parseInt(row.dataset.dueDate);
+            if (due && !isNaN(due)) return due;
+            return rowCreatedMs(row);
+        };
+
         const byDue = (a, b) => {
-            const aTime = parseInt(a.dataset.dueDate) || (asc ? Infinity : -Infinity);
-            const bTime = parseInt(b.dataset.dueDate) || (asc ? Infinity : -Infinity);
+            const aTime = sortKey(a) || (asc ? Infinity : -Infinity);
+            const bTime = sortKey(b) || (asc ? Infinity : -Infinity);
             return asc ? aTime - bTime : bTime - aTime;
         };
 
@@ -2368,9 +2522,15 @@
         // ordered, and they sit above the rest.
         if (lfTtRole() === 'disclosure') {
             const sorted = dataRows.slice().sort(byDue);
-            const frag = document.createDocumentFragment();
-            sorted.forEach(row => frag.appendChild(row));
-            tbody.appendChild(frag);
+            if (sorted.every((r, i) => dataRows[i] === r)) return;
+            lfSortApplying = true;
+            try {
+                const frag = document.createDocumentFragment();
+                sorted.forEach(row => frag.appendChild(row));
+                tbody.appendChild(frag);
+            } finally {
+                lfSortApplying = false;
+            }
             return;
         }
 
@@ -2378,18 +2538,29 @@
         const otherRows = [];
 
         dataRows.forEach(row => {
-            // Read the selected status only (the cell also contains the dropdown's options)
-            const st = lfRowStatusText(row) || ((statusIdx > -1 && row.cells.length > statusIdx) ? row.cells[statusIdx].textContent.trim() : '');
-            if (/^new\b/i.test(st)) newRows.push(row);
+            if (lfRowIsNew(row, statusIdx)) newRows.push(row);
             else otherRows.push(row);
         });
 
         newRows.sort(byDue);
 
-        const fragment = document.createDocumentFragment();
-        newRows.forEach(row => fragment.appendChild(row));
-        otherRows.forEach(row => fragment.appendChild(row));
-        tbody.appendChild(fragment);
+        lfSortLastCounts = { total: dataRows.length, isNew: newRows.length, other: otherRows.length };
+
+        const wanted = newRows.concat(otherRows);
+
+        // Already in this order - touching the DOM would only wake the observer again
+        const same = wanted.length === dataRows.length &&
+                     wanted.every((r, i) => dataRows[i] === r);
+        if (same) { lfSortBailReason = 'already in this order (New rows: ' + newRows.length + ')'; return; }
+
+        lfSortApplying = true;
+        try {
+            const fragment = document.createDocumentFragment();
+            wanted.forEach(row => fragment.appendChild(row));
+            tbody.appendChild(fragment);
+        } finally {
+            lfSortApplying = false;
+        }
     }
 
     // ==========================================
@@ -8499,7 +8670,7 @@
         const panelHtml = `
             <div id="lf-color-panel" class="lf-side-panel">
                 <div class="lf-panel-header">
-                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.175</span></h3>
+                    <h3 class="lf-panel-title">Pipeline Colors <span style="font-size:11px; font-weight:600; color:#94a3b8; margin-left:6px;">v100.9.181</span></h3>
                     <button class="lf-close-btn" id="lf-panel-close">×</button>
                 </div>
                 <div class="lf-panel-content">
@@ -9263,7 +9434,7 @@
                                         currentCustomSort = 'asc';
                                         localStorage.setItem('lf_custom_sort_pref', 'asc');
                                         updateMainBtn('Turn time - ASC');
-                                        sortTableByTurnTime(true);
+                                        sortTableByTurnTime(true, true);
                                         document.body.click();
                                     };
 
@@ -9272,7 +9443,7 @@
                                         currentCustomSort = 'desc';
                                         localStorage.setItem('lf_custom_sort_pref', 'desc');
                                         updateMainBtn('Turn time - DESC');
-                                        sortTableByTurnTime(false);
+                                        sortTableByTurnTime(false, true);
                                         document.body.click();
                                     };
 
@@ -9834,6 +10005,8 @@
                 // "Funded". Disabled at the user's request; the priority on a funded
                 // loan is now left exactly as the user set it.
             });
+
+            try { lfSortWatchTable(); } catch (e) {}          // v100.9.179
 
             // Persistent Turn Time Sorting Execution
             if (currentCustomSort === 'asc') {
